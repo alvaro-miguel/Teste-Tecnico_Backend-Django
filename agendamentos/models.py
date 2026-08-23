@@ -8,9 +8,14 @@ from django.core.exceptions import ValidationError
 class BaseModel(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
+    ativo = models.BooleanField(default=True)
 
     class Meta:
         abstract = True
+
+    def delete(self, *args, **kwargs):
+        self.ativo = False
+        self.save()
 
 
 class Usuario(AbstractUser):

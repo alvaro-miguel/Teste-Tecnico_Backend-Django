@@ -83,6 +83,16 @@ class Agenda(BaseModel):
         return f"Agenda: {self.especialista} - {self.get_dias_semana_display()}"
 
 
+    def save(self, *args, **kwargs):
+        is_nova = self.pk is None
+
+        super().save(*args, **kwargs)
+
+        if is_nova:
+            from .services import gerar_horarios
+            gerar_horarios(self)
+
+
 class HorarioGerado(BaseModel):
     STATUS_CHOICE = (
         ('DISPONIVEL', 'Disponível'),

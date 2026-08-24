@@ -39,7 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'agendamentos',
-    'rest_framework',
+    'drf_spectacular',
 ]
 
 MIDDLEWARE = [
@@ -131,3 +131,14 @@ MAILERS = {
 
 
 AUTH_USER_MODEL = 'agendamentos.Usuario'
+
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'API de Agendamentos Médicos',
+    'DESCRIPTION': 'Documentação oficial da API para o teste técnico',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}

@@ -1,6 +1,8 @@
 
 from datetime import datetime, date, timedelta
 from .models import HorarioGerado
+from django.db import transaction
+from django.core.exceptions import ValidationError
 
 def gerar_horarios(agenda):
     data_base = date.today()
@@ -30,3 +32,19 @@ def gerar_horarios(agenda):
         tempo_atual = proximo_tempo
 
     HorarioGerado.objects.bulk_create(horarios_criar)
+
+
+def agendar_consulta(paciente_id, horario_id):
+    with transaction.atomic():
+        horario = HorarioGerado.objects.select_for_update().get(id=horario_id)
+
+        if horario.status != 'DISPONIVEL':
+            raise ValidationError("Este horário não está disponível")
+
+        horario.status = 'RESERVADO'
+        horario.save()
+
+        consulta = consulta.objects.create(
+            paciente_id = paciente_id,
+            horario_gerado = horario
+        )

@@ -5,10 +5,17 @@ from django.core.exceptions import ValidationError
 
 # Create your models here.
 
+class ActiveManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(ativo=True)
+
+
 class BaseModel(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
     ativo = models.BooleanField(default=True)
+    objects = ActiveManager()
+    all_objects = models.Manager()
 
     class Meta:
         abstract = True
@@ -83,16 +90,6 @@ class Agenda(BaseModel):
         return f"Agenda: {self.especialista} - {self.get_dias_semana_display()}"
 
 
-    def save(self, *args, **kwargs):
-        is_nova = self.pk is None
-
-        super().save(*args, **kwargs)
-
-        if is_nova:     
-            from .services import gerar_horarios
-            gerar_horarios(self)
-
-
 class HorarioGerado(BaseModel):
     STATUS_CHOICE = (
         ('DISPONIVEL', 'Disponível'),
@@ -100,6 +97,7 @@ class HorarioGerado(BaseModel):
     )
 
     agenda = models.ForeignKey(Agenda, on_delete=models.CASCADE, related_name='horarios')
+    data = models.DateField()
     horario_inicio = models.TimeField()
     horario_fim = models.TimeField()
     status = models.CharField(max_length=15, choices=STATUS_CHOICE, default='DISPONIVEL')
@@ -111,16 +109,6 @@ class HorarioGerado(BaseModel):
 class Consulta(BaseModel):
     paciente = models.ForeignKey(Paciente, on_delete=models.CASCADE, related_name='consultas')
     horario_gerado = models.OneToOneField(HorarioGerado, on_delete=models.CASCADE, related_name='consulta')
-
-    def clean(self):
-        if self.horario_gerado.status != 'DISPONIVEL':
-            raise ValidationError("Este horário não está disponível, por favor escolha outro")
-
-    def save(self, *args, **kwargs):
-        if not self.pk:
-            self.horario_gerado.status = 'RESERVADO'
-            self.horario_gerado.save()
-        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Consulta de {self.paciente} às {self.horario_gerado.horario_inicio}"

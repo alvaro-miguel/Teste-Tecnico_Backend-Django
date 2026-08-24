@@ -11,7 +11,7 @@ from .serializers import (
 from rest_framework import status
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
-from .services import agendar_consulta
+from .services import agendar_consulta, gerar_horarios
 
 class EspecialidadeViewSet(viewsets.ModelViewSet):
     queryset = Especialidade.objects.all()
@@ -32,6 +32,14 @@ class AgendaViewSet(viewsets.ModelViewSet):
 class HorarioGeradoViewSet(viewsets.ModelViewSet):
     queryset = HorarioGerado.objects.all()
     serializer_class = HorarioGeradoSerializer
+
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        agenda_id = repsonse.ata['id']
+        agenda = Agenda.objects.get(id=agenda_id)
+
+        gerar_horarios(agenda)
+        return response
 
 class ConsultaViewSet(viewsets.ModelViewSet):
     queryset = Consulta.objects.all()

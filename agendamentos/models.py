@@ -2,7 +2,6 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
-from .services import gerar_horarios
 
 # Create your models here.
 
@@ -90,6 +89,7 @@ class Agenda(BaseModel):
         super().save(*args, **kwargs)
 
         if is_nova:     
+            from .services import gerar_horarios
             gerar_horarios(self)
 
 

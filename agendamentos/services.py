@@ -1,6 +1,6 @@
 
 from datetime import datetime, date, timedelta
-from .models import HorarioGerado
+from .models import HorarioGerado, Consulta
 from django.db import transaction
 from django.core.exceptions import ValidationError
 
@@ -48,3 +48,5 @@ def agendar_consulta(paciente_id, horario_id):
             paciente_id = paciente_id,
             horario_gerado = horario
         )
+
+        return consulta

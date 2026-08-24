@@ -11,6 +11,7 @@ from .serializers import (
 from rest_framework import status
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
+from .services import agendar_consulta
 
 class EspecialidadeViewSet(viewsets.ModelViewSet):
     queryset = Especialidade.objects.all()

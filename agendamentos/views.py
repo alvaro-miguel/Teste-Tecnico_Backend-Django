@@ -8,6 +8,9 @@ from .serializers import (
     HorarioGeradoSerializer, 
     ConsultaSerializer
 )
+from rest_framework import status
+from rest_framework.response import Response
+from django.core.exceptions import ValidationError
 
 class EspecialidadeViewSet(viewsets.ModelViewSet):
     queryset = Especialidade.objects.all()
@@ -32,3 +35,15 @@ class HorarioGeradoViewSet(viewsets.ModelViewSet):
 class ConsultaViewSet(viewsets.ModelViewSet):
     queryset = Consulta.objects.all()
     serializer_class = ConsultaSerializer
+
+    def create(self, request, *args, **kwargs):
+        paciente_id = request.data.get('paciente')
+        horario_id = request.data.get('horario_gerado')
+
+        try:
+            consulta = agendar_consulta(paciente_id, horario_id)
+            serializer = self.get_serializer(consulta)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            return Response({"erro": str(e)},
+                            status=status.HTTP_400_BAD_REQUEST)

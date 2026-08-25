@@ -2,8 +2,6 @@ from rest_framework import viewsets
 from .models import Especialidade, Agenda, HorarioGerado, Consulta
 from .serializers import (
     EspecialidadeSerializer, 
-    EspecialistaSerializer, 
-    PacienteSerializer, 
     AgendaSerializer, 
     HorarioGeradoSerializer, 
     ConsultaSerializer

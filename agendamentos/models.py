@@ -5,9 +5,14 @@ from django.core.exceptions import ValidationError
 
 # Create your models here.
 
+class SoftDeleteQuerySet(models.QuerySet):
+    def delete(self):
+        return self.update(ativo=False)
+
+
 class ActiveManager(models.Manager):
     def get_queryset(self):
-        return super().get_queryset().filter(ativo=True)
+        return SoftDeleteQuerySet(self.model, using=self._db).filter(ativo=True)
 
 
 class CommonModel(models.Model):
@@ -15,7 +20,7 @@ class CommonModel(models.Model):
     atualizado_em = models.DateTimeField(auto_now=True)
     ativo = models.BooleanField(default=True)
     objects = ActiveManager()
-    all_objects = models.Manager()
+    all_objects = SoftDeleteQuerySet.as_manager()
 
     class Meta:
         abstract = True
@@ -126,4 +131,3 @@ class Consulta(CommonModel):
 
     def __str__(self):
         return f"Consulta de {self.paciente} às {self.horario_gerado.horario_inicio}"
-    

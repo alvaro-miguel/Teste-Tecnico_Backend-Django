@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Usuario, Especialidade, Especialista, Paciente, Agenda, HorarioGerado, Consulta
+from .models import Especialidade, Agenda, HorarioGerado, Consulta
+from usuarios.models import Usuario, Especialista, Paciente
 
 class EspecialidadeSerializer(serializers.ModelSerializer):
     class Meta:     

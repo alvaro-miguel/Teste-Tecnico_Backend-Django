@@ -6,12 +6,6 @@ from core.models import CommonModel
 
 # Create your models here.
 
-class TipoUsuario(models.TextChoices):
-    ESPECIALISTA = 'ESPECIALISTA', 'Especialista'
-    PACIENTE = 'PACIENTE', 'Paciente'
-    INTERNO = 'INTERNO', 'Interno'
-
-
 class DiasDaSemana(models.IntegerChoices):
     SEGUNDA = 0, 'Segunda-feira'
     TERCA = 1, 'Terça-feira'
@@ -27,47 +21,16 @@ class StatusHorario(models.TextChoices):
     RESERVADO = 'RESERVADO', 'Reservado'
 
 
-class Usuario(AbstractUser):
-
-    tipo_usuario = models.CharField(
-        max_length=15,
-        choices=TipoUsuario.choices,
-        null=True,
-        blank=True
-    )
-    cpf = models.CharField(max_length=14, unique=True, null=True, blank=True)
-    telefone = models.CharField(max_length=20, null=True, blank=True)
-
-    def __str__(self):
-        return f"{self.first_name} - {self.tipo_usuario}"
-
-
 class Especialidade(CommonModel):
     nome_especialidade = models.CharField(max_length=100, unique=True)
 
     def __str__(self):
         return self.nome_especialidade
 
-
-class Especialista(CommonModel):
-    usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE, related_name='especialista_perfil')
-    especialidade = models.ForeignKey(Especialidade, on_delete=models.PROTECT, related_name='especialistas')
-    crm = models.CharField(max_length=20, unique=True)
-
-    def __str__(self):
-        return f"Dr(a). {self.usuario.first_name} - CRM: {self.crm}"
-
-
-class Paciente(CommonModel):
-    usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE, related_name='paciente_perfil')
-
-    def __str__(self):
-        return self.usuario.first_name or self.usuario.username
-
-
+    
 class Agenda(CommonModel):
 
-    especialista = models.ForeignKey(Especialista, on_delete=models.CASCADE, related_name='agendas')
+    especialista = models.ForeignKey('usuarios.Especialista', on_delete=models.CASCADE, related_name='agendas')
     dias_semana = models.IntegerField(
         choices=DiasDaSemana.choices
     )
@@ -102,7 +65,7 @@ class HorarioGerado(CommonModel):
 
 
 class Consulta(CommonModel):
-    paciente = models.ForeignKey(Paciente, on_delete=models.CASCADE, related_name='consultas')
+    paciente = models.ForeignKey('usuarios.Paciente', on_delete=models.CASCADE, related_name='consultas')
     horario_gerado = models.OneToOneField(HorarioGerado, on_delete=models.CASCADE, related_name='consulta')
 
     def __str__(self):

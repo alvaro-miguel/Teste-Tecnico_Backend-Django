@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'core',
+    'usuarios',
     'agendamentos',
     'drf_spectacular',
 ]
@@ -138,7 +139,7 @@ MAILERS = {
 }
 
 
-AUTH_USER_MODEL = 'agendamentos.Usuario'
+AUTH_USER_MODEL = 'usuarios.Usuario'
 
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',

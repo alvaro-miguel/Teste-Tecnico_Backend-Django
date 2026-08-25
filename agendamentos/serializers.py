@@ -5,31 +5,13 @@ from usuarios.models import Usuario, Especialista, Paciente
 class EspecialidadeSerializer(serializers.ModelSerializer):
     class Meta:     
         model = Especialidade
-        fields = ['id', 'nome_especialidade', 'ativo', 'criado_em', 'editado_em']
+        fields = ['id', 'nome_especialidade', 'ativo', 'criado_em', 'atualizado_em']
 
-
-class EspecialistaSerializer(serializers.ModelSerializer):
-    especialidade_detalhe = EspecialidadeSerializer(source='especialidade', read_only=True)
-    nome = serializers.CharField(source='usuario.first_name', read_only=True)
-    
-    class Meta:
-        model = Especialista
-        fields = ['id', 'nome', 'crm', 'especialidade', 'especialidade_detalhe', 'ativo', 'criado_em', 'editado_em']
-
-
-class PacienteSerializer(serializers.ModelSerializer):
-    nome = serializers.CharField(source='usuario.first_name', read_only=True)
-    telefone = serializers.CharField(source='usuario.telefone', read_only=True)
-    
-    class Meta:
-        model = Paciente
-        fields = ['id', 'nome', 'telefone', 'ativo', 'criado_em', 'editado_em']
-
-
+        
 class HorarioGeradoSerializer(serializers.ModelSerializer):
     class Meta:
         model = HorarioGerado
-        fields = ['id', 'horario_inicio', 'horario_fim', 'status', 'data', 'criado_em', 'editado_em']
+        fields = ['id', 'horario_inicio', 'horario_fim', 'status', 'data', 'criado_em', 'atualizado_em']
 
 
 class AgendaSerializer(serializers.ModelSerializer):
@@ -41,7 +23,7 @@ class AgendaSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'especialista', 'nome_especialista', 'dias_semana', 
             'hora_inicio_expediente', 'hora_fim_expediente', 
-            'quantidade_vagas_dia', 'horarios', 'ativo', 'criado_em', 'editado_em'
+            'quantidade_vagas_dia', 'horarios', 'ativo', 'criado_em', 'atualizado_em'
         ]
 
 
@@ -51,7 +33,7 @@ class ConsultaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Consulta
-        fields = ['id', 'paciente', 'nome_paciente', 'horario_gerado', 'data_hora', 'ativo', 'criado_em', 'editado_em']
+        fields = ['id', 'paciente', 'nome_paciente', 'horario_gerado', 'data_hora', 'ativo', 'criado_em', 'atualizado_em']
 
     def get_data_hora(self, obj):
         return f"{obj.horario_gerado.data} ({obj.horario_gerado.agenda.get_dias_semana_display()}) às {obj.horario_gerado.horario_inicio}"

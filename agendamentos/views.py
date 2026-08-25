@@ -1,5 +1,5 @@
 from rest_framework import viewsets
-from .models import Especialidade, Especialista, Paciente, Agenda, HorarioGerado, Consulta
+from .models import Especialidade, Agenda, HorarioGerado, Consulta
 from .serializers import (
     EspecialidadeSerializer, 
     EspecialistaSerializer, 
@@ -17,13 +17,6 @@ class EspecialidadeViewSet(viewsets.ModelViewSet):
     queryset = Especialidade.objects.all()
     serializer_class = EspecialidadeSerializer
 
-class EspecialistaViewSet(viewsets.ModelViewSet):
-    queryset = Especialista.objects.all()
-    serializer_class = EspecialistaSerializer
-
-class PacienteViewSet(viewsets.ModelViewSet):
-    queryset = Paciente.objects.all()
-    serializer_class = PacienteSerializer
 
 class AgendaViewSet(viewsets.ModelViewSet):
     queryset = Agenda.objects.all()

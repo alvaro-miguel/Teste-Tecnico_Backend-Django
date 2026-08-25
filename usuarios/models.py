@@ -4,6 +4,14 @@ from core.models import CommonModel
 
 # Create your models here.
 
+class DesativaUsuarioMixin:
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+
+        if hasattr(self, 'usuario') and self.usuario:
+            self.usuario.is_active = False
+            self.usuario.save()
+
 
 class TipoUsuario(models.TextChoices):
     ESPECIALISTA = 'ESPECIALISTA', 'Especialista'
@@ -26,7 +34,7 @@ class Usuario(AbstractUser):
         return f"{self.first_name} - {self.tipo_usuario}"
 
 
-class Especialista(CommonModel):
+class Especialista(DesativaUsuarioMixin, CommonModel):
     usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE, related_name='especialista_perfil')
     especialidade = models.ForeignKey('agendamentos.Especialidade', on_delete=models.PROTECT, related_name='especialistas')
     crm = models.CharField(max_length=20, unique=True)
@@ -35,7 +43,7 @@ class Especialista(CommonModel):
         return f"Dr(a). {self.usuario.first_name} - CRM: {self.crm}"
 
 
-class Paciente(CommonModel):
+class Paciente(DesativaUsuarioMixin, CommonModel):
     usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE, related_name='paciente_perfil')
 
     def __str__(self):

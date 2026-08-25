@@ -51,13 +51,14 @@ class Agenda(CommonModel):
 class HorarioGerado(CommonModel):
 
     agenda = models.ForeignKey(Agenda, on_delete=models.CASCADE, related_name='horarios')
-    data = models.DateField()
+    data = models.DateField(db_index=True)
     horario_inicio = models.TimeField()
     horario_fim = models.TimeField()
     status = models.CharField(
         max_length=15,
         choices=StatusHorario.choices,
-        default=StatusHorario.DISPONIVEL
+        default=StatusHorario.DISPONIVEL,
+        db_index=True
     )
 
     def __str__(self):

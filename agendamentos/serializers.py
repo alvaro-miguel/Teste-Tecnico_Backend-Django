@@ -4,7 +4,7 @@ from .models import Usuario, Especialidade, Especialista, Paciente, Agenda, Hora
 class EspecialidadeSerializer(serializers.ModelSerializer):
     class Meta:     
         model = Especialidade
-        fields = ['id', 'nome_especialidade', 'ativo']
+        fields = ['id', 'nome_especialidade', 'ativo', 'criado_em', 'editado_em']
 
 
 class EspecialistaSerializer(serializers.ModelSerializer):
@@ -13,7 +13,7 @@ class EspecialistaSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Especialista
-        fields = ['id', 'nome', 'crm', 'especialidade', 'especialidade_detalhe', 'ativo']
+        fields = ['id', 'nome', 'crm', 'especialidade', 'especialidade_detalhe', 'ativo', 'criado_em', 'editado_em']
 
 
 class PacienteSerializer(serializers.ModelSerializer):
@@ -22,13 +22,13 @@ class PacienteSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Paciente
-        fields = ['id', 'nome', 'telefone', 'ativo']
+        fields = ['id', 'nome', 'telefone', 'ativo', 'criado_em', 'editado_em']
 
 
 class HorarioGeradoSerializer(serializers.ModelSerializer):
     class Meta:
         model = HorarioGerado
-        fields = ['id', 'horario_inicio', 'horario_fim', 'status', 'data']
+        fields = ['id', 'horario_inicio', 'horario_fim', 'status', 'data', 'criado_em', 'editado_em']
 
 
 class AgendaSerializer(serializers.ModelSerializer):
@@ -40,7 +40,7 @@ class AgendaSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'especialista', 'nome_especialista', 'dias_semana', 
             'hora_inicio_expediente', 'hora_fim_expediente', 
-            'quantidade_vagas_dia', 'horarios', 'ativo'
+            'quantidade_vagas_dia', 'horarios', 'ativo', 'criado_em', 'editado_em'
         ]
 
 
@@ -50,7 +50,7 @@ class ConsultaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Consulta
-        fields = ['id', 'paciente', 'nome_paciente', 'horario_gerado', 'data_hora', 'ativo']
+        fields = ['id', 'paciente', 'nome_paciente', 'horario_gerado', 'data_hora', 'ativo', 'criado_em', 'editado_em']
 
     def get_data_hora(self, obj):
         return f"{obj.horario_gerado.data} ({obj.horario_gerado.agenda.get_dias_semana_display()}) às {obj.horario_gerado.horario_inicio}"

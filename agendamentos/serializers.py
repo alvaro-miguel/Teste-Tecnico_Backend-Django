@@ -28,7 +28,7 @@ class PacienteSerializer(serializers.ModelSerializer):
 class HorarioGeradoSerializer(serializers.ModelSerializer):
     class Meta:
         model = HorarioGerado
-        fields = ['id', 'horario_inicio', 'horario_fim', 'status']
+        fields = ['id', 'horario_inicio', 'horario_fim', 'status', 'data']
 
 
 class AgendaSerializer(serializers.ModelSerializer):
@@ -53,4 +53,4 @@ class ConsultaSerializer(serializers.ModelSerializer):
         fields = ['id', 'paciente', 'nome_paciente', 'horario_gerado', 'data_hora', 'ativo']
 
     def get_data_hora(self, obj):
-        return f"{obj.horario_gerado.agenda.get_dias_semana_display()} às {obj.horario_gerado.horario_inicio}"
+        return f"{obj.horario_gerado.data} ({obj.horario_gerado.agenda.get_dias_semana_display()}) às {obj.horario_gerado.horario_inicio}"

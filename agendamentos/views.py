@@ -37,7 +37,7 @@ class HorarioGeradoViewSet(viewsets.ModelViewSet):
     serializer_class = HorarioGeradoSerializer
 
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['status', 'data', 'agenda_especialista']
+    filterset_fields = ['status', 'data', 'agenda__especialista']
 
 class ConsultaViewSet(viewsets.ModelViewSet):
     permission_classes = [IsPacienteOwner]

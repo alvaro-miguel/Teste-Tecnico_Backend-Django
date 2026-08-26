@@ -10,6 +10,8 @@ from rest_framework import status
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
 from .services import agendar_consulta, gerar_horarios
+from rest_framework.permissions import IsAuthenticated
+from .permissions import IsEspecialistaOwner, IsPacienteOwner
 
 class EspecialidadeViewSet(viewsets.ModelViewSet):
     queryset = Especialidade.objects.all()
@@ -17,6 +19,7 @@ class EspecialidadeViewSet(viewsets.ModelViewSet):
 
 
 class AgendaViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsEspecialistaOwner]
     queryset = Agenda.objects.all()
     serializer_class = AgendaSerializer
 
@@ -33,6 +36,7 @@ class HorarioGeradoViewSet(viewsets.ModelViewSet):
     serializer_class = HorarioGeradoSerializer
 
 class ConsultaViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsPacienteOwner]
     queryset = Consulta.objects.all()
     serializer_class = ConsultaSerializer
 

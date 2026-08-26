@@ -10,40 +10,53 @@ from rest_framework import status
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
 from .services import agendar_consulta, gerar_horarios
+from .permissions import IsEspecialistaOwner, IsPacienteOwner, IsInterno
+from django_filters.rest_framework import DjangoFilterBackend
 
 class EspecialidadeViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsInterno]
     queryset = Especialidade.objects.all()
     serializer_class = EspecialidadeSerializer
 
 
 class AgendaViewSet(viewsets.ModelViewSet):
-    queryset = Agenda.objects.all()
+    permission_classes = [IsEspecialistaOwner]
     serializer_class = AgendaSerializer
 
-    def create(self, request, *args, **kwargs):
-        response = super().create(request, *args, **kwargs)
-        agenda_id = response.data['id']
-        agenda = Agenda.objects.get(id=agenda_id)
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_authenticated and getattr(user, 'tipo_usuario', None) == 'ESPECIALISTA':
+            return Agenda.objects.filter(especialista__usuario=user)
+        return Agenda.objects.none()
 
+    def perform_create(self, serializer):
+        agenda = serializer.save()
         gerar_horarios(agenda)
-        return response
+
 
 class HorarioGeradoViewSet(viewsets.ModelViewSet):
     queryset = HorarioGerado.objects.all()
     serializer_class = HorarioGeradoSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['status', 'data', 'agenda__especialista']
+
 
 class ConsultaViewSet(viewsets.ModelViewSet):
-    queryset = Consulta.objects.all()
+    permission_classes = [IsPacienteOwner]
     serializer_class = ConsultaSerializer
 
-    def create(self, request, *args, **kwargs):
-        paciente_id = request.data.get('paciente')
-        horario_id = request.data.get('horario_gerado')
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_authenticated:
+            if getattr(user, 'tipo_usuario', None) == 'PACIENTE':
+                return Consulta.objects.filter(paciente__usuario=user)
+            elif getattr(user, 'tipo_usuario', None) == 'ESPECIALISTA':
+                return Consulta.objects.filter(horario_gerado__agenda__especialista__usuario=user)
+        return Consulta.objects.none()
 
-        try:
-            consulta = agendar_consulta(paciente_id, horario_id)
-            serializer = self.get_serializer(consulta)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        except ValidationError as e:
-            return Response({"erro": str(e)},
-                            status=status.HTTP_400_BAD_REQUEST)
+    def perform_create(self, serializer):
+        paciente = serializer.validated_data.get('paciente')
+        horario = serializer.validated_data.get('horario_gerado')
+        
+        consulta = agendar_consulta(paciente.id, horario.id)
+        serializer.instance = consulta

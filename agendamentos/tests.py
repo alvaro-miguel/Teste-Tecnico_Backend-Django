@@ -1,3 +1,133 @@
-from django.test import TestCase
-
+from rest_framework.test import APITestCase, APITransactionTestCase
+from rest_framework import status
+from django.urls import reverse
+from usuarios.models import Usuario, Paciente, Especialista
+from agendamentos.models import Especialidade, Agenda, HorarioGerado
+from datetime import time, date
+import concurrent.futures
+from agendamentos.services import agendar_consulta
+from django.core.exceptions import ValidationError
+from django.db import connection
 # Create your tests here.
+
+class AgendamentoTestCase(APITestCase):
+    
+    def setUp(self):
+        self.usuario_paciente = Usuario.objects.create_user(username='paciente1', password='123', tipo_usuario='PACIENTE')
+        self.paciente = Paciente.objects.create(usuario=self.usuario_paciente)
+
+        self.usuario_especialista = Usuario.objects.create_user(username='dr_julio', password='123', tipo_usuario='ESPECIALISTA')
+        self.especialidade = Especialidade.objects.create(nome_especialidade='Cardiologia')
+        self.especialista = Especialista.objects.create(usuario=self.usuario_especialista, especialidade=self.especialidade, crm='12345')
+
+        self.agenda = Agenda.objects.create(
+            especialista=self.especialista, 
+            dias_semana=0, 
+            hora_inicio_expediente=time(8, 0), 
+            hora_fim_expediente=time(18, 0), 
+            quantidade_vagas_dia=10
+        )
+        
+        self.horario = HorarioGerado.objects.create(
+            agenda=self.agenda,
+            data=date(2025, 1, 1),
+            horario_inicio=time(8, 0),
+            horario_fim=time(9, 0),
+            status='DISPONIVEL'
+        )
+        
+        self.client.force_authenticate(user=self.usuario_paciente)
+        self.url_consulta = reverse('consulta-list') 
+
+    def test_paciente_agendar_horario_livre(self):
+        payload = {
+            "paciente": self.paciente.id,
+            "horario_gerado": self.horario.id
+        }
+        response = self.client.post(self.url_consulta, payload)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.horario.refresh_from_db()
+        self.assertEqual(self.horario.status, 'RESERVADO')
+
+
+    def test_paciente_nao_agendar_horario_ocupado(self):
+        self.horario.status = 'RESERVADO'
+        self.horario.save()
+
+        payload = {
+            "paciente": self.paciente.id,
+            "horario_gerado": self.horario.id
+        }
+        
+        response = self.client.post(self.url_consulta, payload)
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('erro', response.data) 
+
+
+    def teste_gerarcao_horarios_automaticos(self):
+        self.client.force_authenticate(user=self.usuario_especialista)
+        url_agenda = reverse('agenda-list')
+
+        payload = {
+            "especialista":self.especialista.id,
+            "dias_semana":1,
+            "hora_inicio_expediente":"08:00:00",
+            "hora_fim_expediente":"10:00:00",
+            "quantidade_vagas_dia":4
+        }
+
+        response = self.client.post(url_agenda, payload)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        horarios_gerados = HorarioGerado.objects.filter(agenda_id=response.data['id']).count()
+        self.assertGreater(horarios_gerados, 0, "Nenhum horario foi gerado")
+
+
+class RaceConditionCase(APITransactionTestCase):
+    def setUp(self):
+        self.usuario_paciente1 = Usuario.objects.create_user(username='paciente1', password='123', tipo_usuario='PACIENTE')
+        self.paciente1 = Paciente.objects.create(usuario=self.usuario_paciente1)
+
+        self.usuario_paciente2 = Usuario.objects.create_user(username='paciente2', password='123', tipo_usuario='PACIENTE')
+        self.paciente2 = Paciente.objects.create(usuario=self.usuario_paciente2)
+
+        self.usuario_especialista = Usuario.objects.create_user(username='dr_julio', password='123', tipo_usuario='ESPECIALISTA')
+        self.especialidade = Especialidade.objects.create(nome_especialidade='Cardiologia')
+        self.especialista = Especialista.objects.create(usuario=self.usuario_especialista, especialidade=self.especialidade, crm='12345')
+
+        self.agenda = Agenda.objects.create(
+            especialista = self.especialista, dias_semana = 0, hora_inicio_expediente=time(8, 0), hora_fim_expediente=time(18,0), quantidade_vagas_dia=10
+        )
+
+        self.horario = HorarioGerado.objects.create(
+            agenda=self.agenda, data=date(2025, 1, 1),
+            horario_inicio = time(8,0), horario_fim=time(9,0), status='DISPONIVEL'
+        )
+
+
+    def test_duplo_agendamento(self):
+
+        def tentativa_agendamento(paciente_id, horario_id):
+            try:
+                agendar_consulta(paciente_id, horario_id)
+                return True
+            except ValidationError:
+                return False
+            except Exception:
+                return False
+            finally:
+                connection.close()
+                
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            futuro1 = executor.submit(tentativa_agendamento, self.paciente1.id, self.horario.id)
+            futuro2 = executor.submit(tentativa_agendamento, self.paciente2.id, self.horario.id)
+
+            sucesso1 = futuro1.result()
+            sucesso2 = futuro2.result()
+
+            self.assertTrue(sucesso1 != sucesso2, "Falha crítica: Dois pacientes reservaram a mesma vaga simultaneamente")
+
+            from agendamentos.models import Consulta
+            consultas_criadas = Consulta.objects.filter(horario_gerado=self.horario).count()
+            self.assertEqual(consultas_criadas, 1)

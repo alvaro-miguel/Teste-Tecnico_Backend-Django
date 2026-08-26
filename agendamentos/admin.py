@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Usuario, Especialidade, Especialista, Paciente, Agenda, HorarioGerado, Consulta
+from .models import Especialidade, Agenda, HorarioGerado, Consulta
 
 # Register your models here.
 

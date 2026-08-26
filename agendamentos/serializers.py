@@ -26,6 +26,16 @@ class AgendaSerializer(serializers.ModelSerializer):
             'quantidade_vagas_dia', 'horarios', 'ativo', 'criado_em', 'atualizado_em'
         ]
 
+    def validate(self, data):
+        hora_inicio = data.get('hora_inicio_expediente')
+        hora_fim = data.get('hora_fim_expediente')
+
+        if hora_inicio and hora_fim and hora_inicio >= hora_fim:
+            raise serializers.ValidationError(
+                {"hora_inicio_expediente": "A hora de início deve ser menor que a hora de término."}
+            )
+        return data
+
 
 class ConsultaSerializer(serializers.ModelSerializer):
     nome_paciente = serializers.CharField(source='paciente.usuario.first_name', read_only=True)

@@ -24,13 +24,9 @@ class AgendaViewSet(viewsets.ModelViewSet):
     queryset = Agenda.objects.all()
     serializer_class = AgendaSerializer
 
-    def create(self, request, *args, **kwargs):
-        response = super().create(request, *args, **kwargs)
-        agenda_id = response.data['id']
-        agenda = Agenda.objects.get(id=agenda_id)
-
+    def perform_create(self, serializer):
+        agenda = serializer.save()
         gerar_horarios(agenda)
-        return response
 
 class HorarioGeradoViewSet(viewsets.ModelViewSet):
     queryset = HorarioGerado.objects.all()

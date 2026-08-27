@@ -17,34 +17,49 @@ O sistema permite a gestão de especialidades, especialistas, pacientes, agendas
 
 ## 🛠️ Instruções Claras para Execução do Projeto
 
-Siga os passos abaixo para rodar o projeto localmente:
+Você pode executar o projeto de duas formas: utilizando **Docker (Recomendado)** ou rodando localmente (Virtualenv).
 
-### 1. Pré-requisitos
-Certifique-se de ter instalado em sua máquina:
-- Python 3.10+
-- PostgreSQL rodando localmente (ou via Docker)
+### Opção A: Rodando com Docker (Recomendado)
+A forma mais fácil de rodar o projeto e o banco de dados sem instalar dependências extras na sua máquina.
 
-### 2. Clonar e Configurar o Ambiente Virtual
-No terminal, na pasta do projeto, crie e ative o ambiente virtual:
+1. **Subir os contêineres:**
 ```bash
-# Criar ambiente virtual
-python -m venv venv
+docker-compose up -d
+```
+2. **Rodar as migrações (se for a primeira vez):**
+```bash
+docker-compose exec web python manage.py migrate
+```
+3. **Criar um superusuário (Painel Admin e permissões Internas):**
+```bash
+docker-compose exec web python manage.py createsuperuser
+```
+4. **Executar os testes automatizados:**
+```bash
+docker-compose exec web python manage.py test
+```
+A API estará rodando em `http://127.0.0.1:8000/`.
 
+---
+
+### Opção B: Rodando Localmente (Virtualenv)
+
+**1. Clonar e Configurar o Ambiente Virtual**
+```bash
+python -m venv venv
 # Ativar no Windows:
 venv\Scripts\activate
-
 # Ativar no Linux/Mac:
 source venv/bin/activate
 ```
 
-### 3. Instalar Dependências
-Com o ambiente ativado, instale os pacotes necessários:
+**2. Instalar Dependências**
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configurar Variáveis de Ambiente (.env)
-Crie um arquivo `.env` na raiz do projeto (mesmo nível do `manage.py`) com as configurações do seu banco de dados e do Django:
+**3. Configurar Variáveis de Ambiente (.env)**
+Crie um arquivo `.env` na raiz do projeto e aponte para um banco PostgreSQL local:
 ```env
 SECRET_KEY=sua_chave_secreta_super_segura
 DEBUG=True
@@ -54,62 +69,43 @@ POSTGRES_PASSWORD=senha123
 POSTGRES_HOST=localhost
 ```
 
-### 5. Configurar o Banco de Dados
-Certifique-se de que o banco de dados PostgreSQL especificado no `.env` está criado. Em seguida, rode as migrações:
+**4. Migrar, Testar e Iniciar**
 ```bash
 python manage.py migrate
-```
-
-*(Opcional)* Crie um superusuário para acessar o painel administrativo:
-```bash
-python manage.py createsuperuser
-```
-
-### 6. Executar o Servidor
-Inicie o servidor de desenvolvimento:
-```bash
-python manage.py runserver
-```
-A API estará rodando em `http://127.0.0.1:8000/`.
-
-### 7. Executar os Testes Automatizados
-O projeto conta com testes robustos (incluindo simulação de *Race Condition* com threads e bloqueio de DB). Para rodá-los:
-```bash
 python manage.py test
+python manage.py runserver
 ```
 
 ---
 
 ## 📖 Documentação Automática (Swagger)
 
-A API é auto-documentada. Com o servidor rodando, você pode testar e ver os detalhes dos payloads acessando o painel do Swagger:
+A API é auto-documentada. Com o servidor rodando, acesse:
 - **Interface Interativa (Swagger):** `http://127.0.0.1:8000/api/docs/`
 - **Esquema OpenAPI:** `http://127.0.0.1:8000/api/schema/`
 
 ---
 
-## 🗺️ Mapeamento de Rotas (Endpoints)
+## 🗺️ Mapeamento de Rotas (Endpoints) e Permissões
 
-Abaixo estão listadas todas as rotas mapeadas pela API. A maioria exige um Token JWT no cabeçalho de requisição (`Authorization: Bearer <token>`).
+O sistema possui um controle rígido de perfis (RBAC). A maioria das rotas exige um Token JWT no cabeçalho (`Authorization: Bearer <token>`).
 
 ### 🔐 Autenticação (JWT)
-*Gerenciamento de acesso dos usuários à plataforma.*
-- `POST /api/token/` - Gera um token de acesso (`access`) e atualização (`refresh`) ao enviar usuário e senha.
-- `POST /api/token/refresh/` - Atualiza o token de acesso que expirou usando o token de refresh.
+- `POST /api/token/` - Gera token de acesso (`access`) e atualização (`refresh`).
+- `POST /api/token/refresh/` - Atualiza o token expirado.
 
-### 👤 Usuários
-*Gestão de perfis da aplicação.*
-- `GET | POST | PUT | PATCH | DELETE /api/usuarios/especialistas/` - CRUD de médicos/especialistas. (O *delete* executa um Soft Delete, desativando também a conta associada).
-- `GET | POST | PUT | PATCH | DELETE /api/usuarios/pacientes/` - CRUD de pacientes.
+### 👤 Usuários (Uso Interno)
+*Endpoints destinados ao credenciamento. Apenas usuários `INTERNO` ou `Administradores` podem criar, editar ou excluir. Leitura (GET) liberada.*
+- `GET | POST | PUT | PATCH | DELETE /api/usuarios/especialistas/` - (Soft Delete habilitado).
+- `GET | POST | PUT | PATCH | DELETE /api/usuarios/pacientes/` - (Soft Delete habilitado).
 
-### 📅 Agendamentos
-*O Core Business do sistema de marcações.*
-- `GET | POST | PUT | PATCH | DELETE /api/agendamentos/especialidades/` - Cadastro de áreas médicas (ex: Cardiologia, Pediatria).
-- `GET | POST | PUT | PATCH | DELETE /api/agendamentos/agendas/` - **Requer Especialista logado.** A criação de uma agenda gera **automaticamente** os horários vagos do médico no banco de dados, baseado no horário de início/fim e vagas diárias.
-- `GET | POST | PUT | PATCH | DELETE /api/agendamentos/horarios/` - Lista os horários (slots) gerados no sistema. 
-  - 🔍 **Suporta Filtros Dinâmicos:** Ex: `/api/agendamentos/horarios/?status=DISPONIVEL&data=2024-11-01`
-- `GET | POST | PUT | PATCH | DELETE /api/agendamentos/consultas/` - **Requer Paciente logado.** Realiza a reserva de um `HorarioGerado`. Bloqueado contra agendamentos simultâneos para a mesma vaga (*Transaction Lock*).
+### 📅 Agendamentos (Regras de Negócio)
+- `GET | POST | PUT | PATCH | DELETE /api/agendamentos/especialidades/` - **Apenas nível `INTERNO`** cria/edita. Leitura liberada.
+- `GET | POST | PUT | PATCH | DELETE /api/agendamentos/agendas/` - **Exige perfil `ESPECIALISTA`.** Listagem bloqueada para mostrar apenas as agendas do médico logado. A criação da agenda aciona um **Signal** no banco de dados que gera **automaticamente** os horários vagos (slots).
+- `GET /api/agendamentos/horarios/` - Lista os horários gerados no sistema. 
+  - 🔍 *Filtros Dinâmicos:* `/api/agendamentos/horarios/?status=DISPONIVEL&data=2024-11-01`
+- `GET | POST | PUT | PATCH | DELETE /api/agendamentos/consultas/` - **Exige perfil `PACIENTE`.** Listagem restrita às próprias consultas. O endpoint é travado contra Race Conditions via `select_for_update()`, impedindo agendamentos duplos.
 
 ---
-> 💡 *Nota: A paginação global está habilitada. Todas as rotas de listagem (GETs em coleções) retornarão os dados paginados com o tamanho de 20 itens por página (configurável no settings).*
+> 💡 *Nota Arquitetural: O projeto utiliza `ActiveManager` para omitir automaticamente entidades com "Soft Delete" (`is_active=False`) de todas as querys, e captura validações nativas do Django repassando-as como HTTP 400 Bad Request via DRF.*
 

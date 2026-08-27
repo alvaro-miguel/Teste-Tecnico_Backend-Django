@@ -93,6 +93,7 @@ class HorarioGerado(CommonModel):
             ),
             models.UniqueConstraint(
                 fields=['agenda', 'data', 'horario_inicio'],
+                condition=Q(ativo=True),
                 name='horario_unico_por_agenda_data_inicio',
             ),
         ]

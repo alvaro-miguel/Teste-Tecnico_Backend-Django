@@ -7,7 +7,9 @@ from usuarios.models import Usuario, Paciente, Especialista
 from agendamentos.models import Especialidade, Agenda, HorarioGerado
 from datetime import time, date
 import concurrent.futures
-from agendamentos.services import agendar_consulta
+from unittest.mock import patch
+
+from agendamentos.services import agendar_consulta, atualizar_agenda, criar_agenda
 from django.db import IntegrityError, connection, transaction
 # Create your tests here.
 
@@ -147,6 +149,131 @@ class AgendamentoTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('horario_gerado', response.data)
+
+    def test_atualizacao_da_agenda_regenera_horarios_disponiveis(self):
+        self.client.force_authenticate(user=self.usuario_especialista)
+        response_criacao = self.client.post(reverse('agenda-list'), {
+            'dias_semana': 1,
+            'hora_inicio_expediente': '08:00:00',
+            'hora_fim_expediente': '10:00:00',
+            'quantidade_vagas_dia': 2,
+        })
+        self.assertEqual(response_criacao.status_code, status.HTTP_201_CREATED)
+
+        agenda_id = response_criacao.data['id']
+        ids_horarios_antigos = list(
+            HorarioGerado.objects
+            .filter(agenda_id=agenda_id)
+            .values_list('id', flat=True)
+        )
+
+        response_atualizacao = self.client.patch(
+            reverse('agenda-detail', args=[agenda_id]),
+            {
+                'hora_inicio_expediente': '09:00:00',
+                'hora_fim_expediente': '11:00:00',
+            },
+        )
+
+        self.assertEqual(
+            response_atualizacao.status_code,
+            status.HTTP_200_OK,
+            response_atualizacao.data,
+        )
+        self.assertFalse(
+            HorarioGerado.objects.filter(id__in=ids_horarios_antigos).exists()
+        )
+        self.assertEqual(
+            HorarioGerado.all_objects.filter(
+                id__in=ids_horarios_antigos,
+                ativo=False,
+            ).count(),
+            len(ids_horarios_antigos),
+        )
+        novos_horarios = HorarioGerado.objects.filter(agenda_id=agenda_id)
+        self.assertGreater(novos_horarios.count(), 0)
+        self.assertTrue(all(
+            horario.horario_inicio >= time(9, 0)
+            and horario.horario_fim <= time(11, 0)
+            for horario in novos_horarios
+        ))
+
+    def test_rejeita_alteracao_de_agenda_com_reserva(self):
+        self.client.force_authenticate(user=self.usuario_especialista)
+        response_criacao = self.client.post(reverse('agenda-list'), {
+            'dias_semana': 1,
+            'hora_inicio_expediente': '08:00:00',
+            'hora_fim_expediente': '10:00:00',
+            'quantidade_vagas_dia': 2,
+        })
+        agenda_id = response_criacao.data['id']
+        horario = HorarioGerado.objects.filter(agenda_id=agenda_id).first()
+        horario.status = 'RESERVADO'
+        horario.save(update_fields=['status'])
+
+        response = self.client.patch(
+            reverse('agenda-detail', args=[agenda_id]),
+            {'hora_inicio_expediente': '09:00:00'},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+            response.data,
+        )
+        self.assertIn('agenda', response.data)
+        self.assertEqual(
+            Agenda.objects.get(id=agenda_id).hora_inicio_expediente,
+            time(8, 0),
+        )
+
+    @patch('agendamentos.services.gerar_horarios')
+    def test_falha_na_geracao_desfaz_criacao_da_agenda(self, gerar_mock):
+        gerar_mock.side_effect = RuntimeError('Falha simulada na geração')
+        quantidade_inicial = Agenda.objects.count()
+
+        with self.assertRaises(RuntimeError):
+            criar_agenda(
+                especialista=self.especialista,
+                dias_semana=1,
+                hora_inicio_expediente=time(8, 0),
+                hora_fim_expediente=time(10, 0),
+                quantidade_vagas_dia=2,
+            )
+
+        self.assertEqual(Agenda.objects.count(), quantidade_inicial)
+
+    def test_falha_na_regeneracao_desfaz_atualizacao_da_agenda(self):
+        agenda = criar_agenda(
+            especialista=self.especialista,
+            dias_semana=1,
+            hora_inicio_expediente=time(8, 0),
+            hora_fim_expediente=time(10, 0),
+            quantidade_vagas_dia=2,
+        )
+        ids_horarios = list(
+            HorarioGerado.objects
+            .filter(agenda=agenda)
+            .values_list('id', flat=True)
+        )
+
+        with patch(
+            'agendamentos.services.gerar_horarios',
+            side_effect=RuntimeError('Falha simulada na regeneração'),
+        ):
+            with self.assertRaises(RuntimeError):
+                atualizar_agenda(agenda, {
+                    'hora_inicio_expediente': time(9, 0),
+                    'hora_fim_expediente': time(11, 0),
+                })
+
+        agenda.refresh_from_db()
+        self.assertEqual(agenda.hora_inicio_expediente, time(8, 0))
+        self.assertEqual(agenda.hora_fim_expediente, time(10, 0))
+        self.assertEqual(
+            HorarioGerado.objects.filter(id__in=ids_horarios).count(),
+            len(ids_horarios),
+        )
 
 
 class RaceConditionCase(APITransactionTestCase):

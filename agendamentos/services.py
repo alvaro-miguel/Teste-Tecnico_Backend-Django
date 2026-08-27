@@ -1,8 +1,16 @@
 
 from datetime import datetime, date, timedelta
-from .models import HorarioGerado, Consulta, StatusHorario
+from .models import Agenda, HorarioGerado, Consulta, StatusHorario
 from django.db import IntegrityError, transaction
 from rest_framework.exceptions import ValidationError
+
+
+CAMPOS_GRADE_AGENDA = {
+    'dias_semana',
+    'hora_inicio_expediente',
+    'hora_fim_expediente',
+    'quantidade_vagas_dia',
+}
 
 def gerar_horarios(agenda):
     agenda.full_clean()
@@ -37,6 +45,53 @@ def gerar_horarios(agenda):
                 horarios_criar.append(horario)
 
     HorarioGerado.objects.bulk_create(horarios_criar)
+
+
+@transaction.atomic
+def criar_agenda(**dados_agenda):
+    agenda = Agenda(**dados_agenda)
+    agenda.full_clean()
+    agenda.save()
+    gerar_horarios(agenda)
+    return agenda
+
+
+@transaction.atomic
+def atualizar_agenda(instance, dados_agenda):
+    agenda = Agenda.objects.select_for_update().get(pk=instance.pk)
+    grade_alterada = any(
+        campo in dados_agenda and getattr(agenda, campo) != dados_agenda[campo]
+        for campo in CAMPOS_GRADE_AGENDA
+    )
+
+    if grade_alterada:
+        horarios = (
+            HorarioGerado.all_objects
+            .select_for_update()
+            .filter(agenda=agenda)
+        )
+        possui_reserva = (
+            horarios.filter(status=StatusHorario.RESERVADO).exists()
+            or Consulta.all_objects.filter(horario_gerado__agenda=agenda).exists()
+        )
+        if possui_reserva:
+            raise ValidationError({
+                'agenda': (
+                    'Não é possível alterar a grade de uma agenda que possui reservas.'
+                )
+            })
+
+    for campo, valor in dados_agenda.items():
+        setattr(agenda, campo, valor)
+
+    agenda.full_clean()
+    agenda.save()
+
+    if grade_alterada:
+        HorarioGerado.objects.filter(agenda=agenda).update(ativo=False)
+        gerar_horarios(agenda)
+
+    return agenda
 
 
 def agendar_consulta(paciente_id, horario_id):

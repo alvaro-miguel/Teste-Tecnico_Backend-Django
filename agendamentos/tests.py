@@ -4,8 +4,9 @@ from rest_framework.exceptions import ValidationError
 from django.urls import reverse
 from django.test import skipUnlessDBFeature
 from usuarios.models import Usuario, Paciente, Especialista
-from agendamentos.models import Especialidade, Agenda, HorarioGerado
-from datetime import time, date
+from agendamentos.models import Consulta, Especialidade, Agenda, HorarioGerado
+from datetime import time, date, timedelta
+from django.utils import timezone
 import concurrent.futures
 import threading
 from unittest.mock import patch
@@ -34,7 +35,7 @@ class AgendamentoTestCase(APITestCase):
         
         self.horario = HorarioGerado.objects.create(
             agenda=self.agenda,
-            data=date(2025, 1, 1),
+            data=timezone.localdate() + timedelta(days=1),
             horario_inicio=time(8, 0),
             horario_fim=time(9, 0),
             status='DISPONIVEL'
@@ -67,6 +68,67 @@ class AgendamentoTestCase(APITestCase):
         
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('erro', response.data) 
+
+    def test_paciente_nao_pode_agendar_horario_passado(self):
+        self.horario.data = timezone.localdate() - timedelta(days=1)
+        self.horario.save(update_fields=['data'])
+
+        response = self.client.post(self.url_consulta, {
+            'horario_gerado': self.horario.id,
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('horario_gerado', response.data)
+        self.assertFalse(Consulta.objects.filter(horario_gerado=self.horario).exists())
+
+    def test_paciente_inativo_nao_pode_agendar(self):
+        self.paciente.delete()
+
+        response = self.client.post(self.url_consulta, {
+            'horario_gerado': self.horario.id,
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('paciente', response.data)
+
+    def test_paciente_nao_pode_reservar_horarios_sobrepostos(self):
+        primeira_reserva = self.client.post(self.url_consulta, {
+            'horario_gerado': self.horario.id,
+        })
+        self.assertEqual(primeira_reserva.status_code, status.HTTP_201_CREATED)
+
+        outro_usuario = Usuario.objects.create_user(
+            username='dr_segundo',
+            password='123',
+            tipo_usuario='ESPECIALISTA',
+        )
+        outro_especialista = Especialista.objects.create(
+            usuario=outro_usuario,
+            especialidade=self.especialidade,
+            crm='CRM-SEGUNDO',
+        )
+        outra_agenda = Agenda.objects.create(
+            especialista=outro_especialista,
+            dias_semana=0,
+            hora_inicio_expediente=time(8, 30),
+            hora_fim_expediente=time(9, 30),
+            quantidade_vagas_dia=1,
+        )
+        horario_sobreposto = HorarioGerado.objects.create(
+            agenda=outra_agenda,
+            data=self.horario.data,
+            horario_inicio=time(8, 30),
+            horario_fim=time(9, 30),
+        )
+
+        response = self.client.post(self.url_consulta, {
+            'horario_gerado': horario_sobreposto.id,
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('paciente', response.data)
+        horario_sobreposto.refresh_from_db()
+        self.assertEqual(horario_sobreposto.status, 'DISPONIVEL')
 
 
     def test_geracao_horarios_automaticos(self):
@@ -377,7 +439,8 @@ class RaceConditionCase(APITransactionTestCase):
         )
 
         self.horario = HorarioGerado.objects.create(
-            agenda=self.agenda, data=date(2025, 1, 1),
+            agenda=self.agenda,
+            data=timezone.localdate() + timedelta(days=1),
             horario_inicio = time(8,0), horario_fim=time(9,0), status='DISPONIVEL'
         )
 
@@ -445,3 +508,51 @@ class RaceConditionCase(APITransactionTestCase):
             ).count(),
             1,
         )
+
+    @skipUnlessDBFeature('has_select_for_update')
+    def test_paciente_nao_reserva_horarios_sobrepostos_simultaneamente(self):
+        outro_usuario = Usuario.objects.create_user(
+            username='dr_segundo',
+            password='123',
+            tipo_usuario='ESPECIALISTA',
+        )
+        outro_especialista = Especialista.objects.create(
+            usuario=outro_usuario,
+            especialidade=self.especialidade,
+            crm='CRM-SEGUNDO',
+        )
+        outra_agenda = Agenda.objects.create(
+            especialista=outro_especialista,
+            dias_semana=0,
+            hora_inicio_expediente=time(8, 30),
+            hora_fim_expediente=time(9, 30),
+            quantidade_vagas_dia=1,
+        )
+        outro_horario = HorarioGerado.objects.create(
+            agenda=outra_agenda,
+            data=self.horario.data,
+            horario_inicio=time(8, 30),
+            horario_fim=time(9, 30),
+        )
+        barreira = threading.Barrier(2)
+
+        def reservar(horario_id):
+            try:
+                barreira.wait()
+                agendar_consulta(self.paciente1.id, horario_id)
+                return True
+            except ValidationError:
+                return False
+            finally:
+                connection.close()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            resultados = [
+                executor.submit(reservar, self.horario.id),
+                executor.submit(reservar, outro_horario.id),
+            ]
+            sucessos = [resultado.result() for resultado in resultados]
+
+        self.assertEqual(sucessos.count(True), 1)
+        self.assertEqual(sucessos.count(False), 1)
+        self.assertEqual(Consulta.objects.filter(paciente=self.paciente1).count(), 1)

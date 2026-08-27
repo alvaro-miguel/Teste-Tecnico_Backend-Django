@@ -3,6 +3,7 @@ from datetime import datetime, date, timedelta
 from .models import Agenda, HorarioGerado, Consulta, StatusHorario
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 
@@ -112,6 +113,20 @@ def atualizar_agenda(instance, dados_agenda):
 
 def agendar_consulta(paciente_id, horario_id):
     with transaction.atomic():
+        from usuarios.models import Paciente
+
+        try:
+            paciente = (
+                Paciente.objects
+                .select_for_update()
+                .select_related('usuario')
+                .get(pk=paciente_id, usuario__is_active=True)
+            )
+        except Paciente.DoesNotExist as exc:
+            raise ValidationError({
+                'paciente': 'Paciente não encontrado ou inativo.'
+            }) from exc
+
         try:
             horario = (
                 HorarioGerado.objects
@@ -128,15 +143,42 @@ def agendar_consulta(paciente_id, horario_id):
                 'horario_gerado': 'Horário não encontrado ou indisponível.'
             }) from exc
 
-        if horario.status != StatusHorario.DISPONIVEL:
+        agora = timezone.localtime()
+        horario_no_passado = (
+            horario.data < agora.date()
+            or (
+                horario.data == agora.date()
+                and horario.horario_inicio <= agora.time().replace(tzinfo=None)
+            )
+        )
+        if horario_no_passado:
+            raise ValidationError({
+                'horario_gerado': 'Não é possível reservar um horário passado.'
+            })
+
+        consulta_existente = Consulta.objects.filter(
+            horario_gerado=horario,
+        ).exists()
+        if horario.status != StatusHorario.DISPONIVEL or consulta_existente:
             raise ValidationError({'erro': 'Este horário não está disponível.'})
+
+        paciente_indisponivel = Consulta.objects.filter(
+            paciente=paciente,
+            horario_gerado__data=horario.data,
+            horario_gerado__horario_inicio__lt=horario.horario_fim,
+            horario_gerado__horario_fim__gt=horario.horario_inicio,
+        ).exists()
+        if paciente_indisponivel:
+            raise ValidationError({
+                'paciente': 'O paciente já possui uma consulta nesse intervalo.'
+            })
 
         horario.status = StatusHorario.RESERVADO
         horario.save(update_fields=['status', 'atualizado_em'])
 
         try:
             consulta = Consulta.objects.create(
-                paciente_id=paciente_id,
+                paciente=paciente,
                 horario_gerado=horario,
             )
         except IntegrityError as exc:

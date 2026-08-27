@@ -1,6 +1,8 @@
-venv/
+.git
+.gitignore
 .env
-__pycache__/
+venv
+__pycache__
 *.py[cod]
 *.sqlite3
 Teste Técnico Estágio.pdf

@@ -5,12 +5,23 @@ from rest_framework import serializers
 
 from agendamentos.serializers import EspecialidadeSerializer
 from .models import Especialista, Paciente, TipoUsuario, Usuario
+from .validators import (
+    normalizar_cpf,
+    normalizar_crm,
+    normalizar_telefone,
+    normalizar_texto,
+)
 
 
 class UsuarioCadastroSerializer(serializers.ModelSerializer):
     username = serializers.CharField(
         max_length=150,
         validators=[UnicodeUsernameValidator()],
+    )
+    first_name = serializers.CharField(
+        max_length=150,
+        required=True,
+        allow_blank=False,
     )
     password = serializers.CharField(
         write_only=True,
@@ -33,6 +44,30 @@ class UsuarioCadastroSerializer(serializers.ModelSerializer):
             'cpf': {'validators': []},
         }
 
+    def validate_username(self, value):
+        username = value.strip()
+        if not username:
+            raise serializers.ValidationError('Este campo não pode ficar em branco.')
+        return username
+
+    def validate_first_name(self, value):
+        nome = normalizar_texto(value)
+        if not nome:
+            raise serializers.ValidationError('Este campo não pode ficar em branco.')
+        return nome
+
+    def validate_last_name(self, value):
+        return normalizar_texto(value)
+
+    def validate_email(self, value):
+        return value.strip().lower()
+
+    def validate_cpf(self, value):
+        return normalizar_cpf(value)
+
+    def validate_telefone(self, value):
+        return normalizar_telefone(value)
+
 
 class PerfilSerializerMixin:
     tipo_usuario = None
@@ -42,7 +77,9 @@ class PerfilSerializerMixin:
         usuario_id = usuario_atual.id if usuario_atual else None
 
         username = dados_usuario.get('username')
-        if Usuario.objects.filter(username=username).exclude(id=usuario_id).exists():
+        if Usuario.objects.filter(
+            username__iexact=username
+        ).exclude(id=usuario_id).exists():
             raise serializers.ValidationError({
                 'username': 'Já existe um usuário com este nome.'
             })
@@ -135,6 +172,20 @@ class EspecialistaSerializer(PerfilSerializerMixin, serializers.ModelSerializer)
             'atualizado_em',
         ]
         read_only_fields = ['ativo', 'criado_em', 'atualizado_em']
+        extra_kwargs = {
+            'crm': {'validators': []},
+        }
+
+    def validate_crm(self, value):
+        crm = normalizar_crm(value)
+        especialista_id = self.instance.id if self.instance else None
+        if Especialista.all_objects.filter(crm=crm).exclude(
+            id=especialista_id
+        ).exists():
+            raise serializers.ValidationError(
+                'Já existe um especialista com este CRM.'
+            )
+        return crm
 
     @transaction.atomic
     def create(self, validated_data):

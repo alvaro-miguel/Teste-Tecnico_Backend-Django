@@ -1,9 +1,12 @@
 from datetime import time
 
 from django.test import TestCase
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APITestCase
 
 from agendamentos.models import Agenda, Especialidade, HorarioGerado
-from usuarios.models import Especialista, Paciente, Usuario
+from usuarios.models import Especialista, Paciente, TipoUsuario, Usuario
 
 
 class SoftDeletePerfisTestCase(TestCase):
@@ -63,3 +66,174 @@ class SoftDeletePerfisTestCase(TestCase):
         self.assertFalse(usuario.is_active)
         self.assertFalse(Agenda.objects.filter(pk=agenda.pk).exists())
         self.assertFalse(HorarioGerado.objects.filter(pk=horario.pk).exists())
+
+
+class ValidacaoCadastroAPITestCase(APITestCase):
+    def setUp(self):
+        self.usuario_interno = Usuario.objects.create_user(
+            username='interno',
+            password='SenhaForte@2026',
+            tipo_usuario=TipoUsuario.INTERNO,
+        )
+        self.client.force_authenticate(self.usuario_interno)
+        self.especialidade = Especialidade.objects.create(
+            nome_especialidade='Cardiologia'
+        )
+
+    def dados_usuario(self, **alteracoes):
+        dados = {
+            'username': 'paciente.teste',
+            'password': 'SenhaForte@2026',
+            'first_name': '  Maria   da Silva  ',
+            'last_name': '  Souza   Lima  ',
+            'email': '  MARIA@EXAMPLE.COM ',
+            'cpf': '529.982.247-25',
+            'telefone': '(11) 98765-4321',
+        }
+        dados.update(alteracoes)
+        return dados
+
+    def test_cadastro_normaliza_dados_do_paciente(self):
+        resposta = self.client.post(
+            reverse('paciente-list'),
+            {'usuario': self.dados_usuario()},
+            format='json',
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_201_CREATED)
+        paciente = Paciente.objects.get(pk=resposta.data['id'])
+        self.assertEqual(paciente.usuario.first_name, 'Maria da Silva')
+        self.assertEqual(paciente.usuario.last_name, 'Souza Lima')
+        self.assertEqual(paciente.usuario.email, 'maria@example.com')
+        self.assertEqual(paciente.usuario.cpf, '52998224725')
+        self.assertEqual(paciente.usuario.telefone, '11987654321')
+
+    def test_rejeita_cpf_invalido(self):
+        resposta = self.client.post(
+            reverse('paciente-list'),
+            {'usuario': self.dados_usuario(cpf='111.111.111-11')},
+            format='json',
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('cpf', resposta.data['usuario'])
+
+    def test_rejeita_cpf_duplicado_com_formatacao_diferente(self):
+        Usuario.objects.create_user(
+            username='cpf.existente',
+            cpf='52998224725',
+        )
+
+        resposta = self.client.post(
+            reverse('paciente-list'),
+            {'usuario': self.dados_usuario()},
+            format='json',
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('cpf', resposta.data['usuario'])
+
+    def test_rejeita_telefone_sem_ddd(self):
+        resposta = self.client.post(
+            reverse('paciente-list'),
+            {'usuario': self.dados_usuario(telefone='98765-4321')},
+            format='json',
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('telefone', resposta.data['usuario'])
+
+    def test_rejeita_nome_composto_apenas_por_espacos(self):
+        resposta = self.client.post(
+            reverse('paciente-list'),
+            {'usuario': self.dados_usuario(first_name='   ')},
+            format='json',
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('first_name', resposta.data['usuario'])
+
+    def test_rejeita_username_duplicado_independentemente_da_caixa(self):
+        Usuario.objects.create_user(username='Paciente.Teste')
+
+        resposta = self.client.post(
+            reverse('paciente-list'),
+            {'usuario': self.dados_usuario()},
+            format='json',
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('username', resposta.data['usuario'])
+
+    def test_normaliza_crm_do_especialista(self):
+        resposta = self.client.post(
+            reverse('especialista-list'),
+            {
+                'usuario': self.dados_usuario(username='especialista'),
+                'crm': 'CRM-SP 0012345',
+                'especialidade': self.especialidade.pk,
+            },
+            format='json',
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_201_CREATED)
+        especialista = Especialista.objects.get(pk=resposta.data['id'])
+        self.assertEqual(especialista.crm, '12345/SP')
+
+    def test_rejeita_crm_invalido(self):
+        resposta = self.client.post(
+            reverse('especialista-list'),
+            {
+                'usuario': self.dados_usuario(username='especialista'),
+                'crm': '12345/XX',
+                'especialidade': self.especialidade.pk,
+            },
+            format='json',
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('crm', resposta.data)
+
+    def test_rejeita_crm_normalizado_duplicado(self):
+        usuario = Usuario.objects.create_user(username='especialista.existente')
+        Especialista.objects.create(
+            usuario=usuario,
+            crm='12345/SP',
+            especialidade=self.especialidade,
+        )
+
+        resposta = self.client.post(
+            reverse('especialista-list'),
+            {
+                'usuario': self.dados_usuario(username='especialista'),
+                'crm': 'CRM-SP 12345',
+                'especialidade': self.especialidade.pk,
+            },
+            format='json',
+        )
+
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('crm', resposta.data)
+
+    def test_normaliza_nome_e_rejeita_especialidade_duplicada_sem_case(self):
+        resposta_criacao = self.client.post(
+            reverse('especialidade-list'),
+            {'nome_especialidade': '  Cirurgia   Geral  '},
+            format='json',
+        )
+        resposta_duplicada = self.client.post(
+            reverse('especialidade-list'),
+            {'nome_especialidade': 'cirurgia geral'},
+            format='json',
+        )
+
+        self.assertEqual(resposta_criacao.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            resposta_criacao.data['nome_especialidade'],
+            'Cirurgia Geral',
+        )
+        self.assertEqual(
+            resposta_duplicada.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertIn('nome_especialidade', resposta_duplicada.data)

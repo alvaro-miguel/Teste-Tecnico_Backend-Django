@@ -2,6 +2,7 @@ from datetime import datetime
 
 from django.db import models
 from django.db.models import F, Q
+from django.db.models.functions import Lower
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
@@ -26,6 +27,14 @@ class StatusHorario(models.TextChoices):
 
 class Especialidade(CommonModel):
     nome_especialidade = models.CharField(max_length=100, unique=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                Lower('nome_especialidade'),
+                name='especialidade_nome_unico_case_insensitive',
+            ),
+        ]
 
     def __str__(self):
         return self.nome_especialidade

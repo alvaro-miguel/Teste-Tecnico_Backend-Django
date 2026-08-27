@@ -1,34 +1,43 @@
 # API de Agendamentos Médicos
 
-Backend de um sistema de agendamentos médicos desenvolvido com Django e Django REST Framework. A aplicação administra especialidades, especialistas, pacientes e agendas, gera horários automaticamente e protege a reserva de uma mesma vaga contra concorrência.
+API REST para administrar especialidades, especialistas, pacientes, agendas e consultas médicas. O sistema gera automaticamente as vagas de cada agenda, usa autenticação JWT, aplica exclusão lógica aos registros e protege reservas concorrentes com transações e bloqueios no PostgreSQL.
 
 ## Tecnologias
 
 - Python 3.12
-- Django e Django REST Framework
-- PostgreSQL
-- JWT com Simple JWT
-- Filtros e paginação com `django-filter`
+- Django 6.1 e Django REST Framework 3.18
+- PostgreSQL 15
+- Simple JWT
+- `django-filter`
 - OpenAPI e Swagger UI com `drf-spectacular`
 - Docker e Docker Compose
 
-## Execução com Docker
+## Estrutura do projeto
+
+```text
+agendamentos/  Domínio de especialidades, agendas, horários e consultas
+core/          Modelo-base, manager de registros ativos e exclusão lógica
+setup/         Configurações, URLs e entrypoints ASGI/WSGI do Django
+usuarios/      Usuário customizado e perfis de pacientes e especialistas
+```
+
+## Como executar com Docker
 
 Pré-requisito: Docker com o comando `docker compose` disponível.
 
-1. Crie o arquivo de configuração:
-
-```bash
-cp .env.example .env
-```
-
-No PowerShell, use:
+1. Crie o arquivo de ambiente:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-2. Revise ao menos o valor de `SECRET_KEY` no `.env`.
+No Linux ou macOS:
+
+```bash
+cp .env.example .env
+```
+
+2. Troque ao menos o valor de `SECRET_KEY` no arquivo `.env`.
 
 3. Construa e inicie os serviços:
 
@@ -36,9 +45,9 @@ Copy-Item .env.example .env
 docker compose up --build
 ```
 
-O container `web` aguarda o PostgreSQL ficar saudável, executa as migrations e inicia a API em `http://127.0.0.1:8000/`.
+O serviço `web` aguarda o PostgreSQL ficar saudável, executa as migrations e disponibiliza a API em `http://127.0.0.1:8000/`.
 
-Com os containers ativos, os comandos administrativos podem ser executados assim:
+Com os containers ativos, use:
 
 ```bash
 docker compose exec web python manage.py createsuperuser
@@ -52,122 +61,170 @@ Para encerrar:
 docker compose down
 ```
 
-Use `docker compose down -v` somente quando também quiser apagar definitivamente os dados locais do PostgreSQL.
+`docker compose down -v` também remove definitivamente o volume local do PostgreSQL.
 
-## Execução local
+## Como executar localmente
 
-Pré-requisitos: Python 3.12 e PostgreSQL acessível localmente.
-
-1. Crie e ative o ambiente virtual:
-
-```bash
-python -m venv venv
-```
-
-No PowerShell:
+Pré-requisitos: Python 3.12 e uma instância do PostgreSQL acessível.
 
 ```powershell
+python -m venv venv
 venv\Scripts\Activate.ps1
-```
-
-No Linux ou macOS:
-
-```bash
-source venv/bin/activate
-```
-
-2. Instale as dependências e configure o ambiente:
-
-```bash
 pip install -r requirements.txt
-cp .env.example .env
-```
-
-3. Ajuste no `.env` as credenciais do seu PostgreSQL. Para execução local, mantenha `POSTGRES_HOST=localhost`.
-
-4. Execute a aplicação:
-
-```bash
+Copy-Item .env.example .env
 python manage.py migrate
 python manage.py test
 python manage.py runserver
 ```
 
+No Linux ou macOS, ative o ambiente com `source venv/bin/activate` e copie o arquivo com `cp .env.example .env`.
+
+Antes de executar as migrations, ajuste as credenciais do PostgreSQL no `.env`. Fora do Docker, normalmente `POSTGRES_HOST=localhost`; no Compose esse valor é substituído por `db`.
+
 ## Variáveis de ambiente
 
-| Variável | Finalidade | Padrão de desenvolvimento |
+| Variável | Finalidade | Valor de desenvolvimento |
 | --- | --- | --- |
-| `SECRET_KEY` | Chave criptográfica do Django | chave local insegura |
+| `SECRET_KEY` | Chave criptográfica do Django | `troque-por-uma-chave-segura` |
 | `DEBUG` | Ativa o modo de depuração | `True` |
-| `ALLOWED_HOSTS` | Hosts separados por vírgula | `localhost,127.0.0.1` |
+| `ALLOWED_HOSTS` | Hosts permitidos, separados por vírgula | `localhost,127.0.0.1` |
 | `TIME_ZONE` | Fuso horário da aplicação | `America/Sao_Paulo` |
 | `POSTGRES_DB` | Nome do banco | `agendamentos_db` |
 | `POSTGRES_USER` | Usuário do banco | `usuario_db` |
 | `POSTGRES_PASSWORD` | Senha do banco | `senha123` |
-| `POSTGRES_HOST` | Host do banco | `localhost`; o Compose força `db` |
+| `POSTGRES_HOST` | Host do banco | `localhost` |
 | `POSTGRES_PORT` | Porta do banco | `5432` |
 
-Os valores padrão servem apenas para desenvolvimento. Em outro ambiente, use uma `SECRET_KEY` forte, `DEBUG=False` e credenciais próprias.
+Os valores do `.env.example` são apenas para desenvolvimento. Em produção, use uma chave forte, `DEBUG=False`, hosts explícitos e credenciais próprias.
 
-## Autenticação
+## Autenticação e perfis
 
-Obtenha e renove tokens JWT pelas rotas:
+Obtenha e renove tokens JWT nestas rotas:
 
-- `POST /api/token/`
-- `POST /api/token/refresh/`
+```http
+POST /api/token/
+POST /api/token/refresh/
+```
 
-Nas rotas protegidas, envie:
+Exemplo de autenticação:
 
 ```http
 Authorization: Bearer <access_token>
 ```
 
-## Rotas e permissões
+O sistema possui três perfis: `PACIENTE`, `ESPECIALISTA` e `INTERNO`. Superusuários recebem as mesmas permissões administrativas de um usuário interno. Pacientes e especialistas são cadastrados por um usuário interno; não há endpoint público de autorregistro.
 
-As rotas de detalhe usam o formato correspondente com `/{id}/`.
+## Endpoints e permissões
 
-| Recurso | Operações | Acesso |
+Todos os endpoints de recurso terminam com `/`. As rotas de detalhe seguem o formato `/{id}/`.
+
+| Método | Endpoint | Acesso |
 | --- | --- | --- |
-| `/api/usuarios/especialistas/` | leitura | público |
-| `/api/usuarios/especialistas/` | criação e alterações | usuário `INTERNO` ou superusuário |
-| `/api/usuarios/pacientes/` | CRUD | usuário `INTERNO` ou superusuário |
-| `/api/agendamentos/especialidades/` | leitura | público |
-| `/api/agendamentos/especialidades/` | criação e alterações | usuário `INTERNO` ou superusuário |
-| `/api/agendamentos/agendas/` | CRUD | especialista autenticado, limitado às próprias agendas |
-| `/api/agendamentos/horarios/` | leitura | público |
-| `/api/agendamentos/consultas/` | criação | paciente autenticado |
-| `/api/agendamentos/consultas/` | leitura | paciente, especialista relacionado, `INTERNO` ou superusuário |
+| `POST` | `/api/token/` | Público, com usuário e senha válidos |
+| `POST` | `/api/token/refresh/` | Público, com refresh token válido |
+| `GET` | `/api/usuarios/especialistas/` | Público |
+| `POST`, `PUT`, `PATCH`, `DELETE` | `/api/usuarios/especialistas/` | Interno ou superusuário |
+| CRUD | `/api/usuarios/pacientes/` | Interno ou superusuário |
+| `GET` | `/api/agendamentos/especialidades/` | Público |
+| `POST`, `PUT`, `PATCH`, `DELETE` | `/api/agendamentos/especialidades/` | Interno ou superusuário |
+| CRUD | `/api/agendamentos/agendas/` | Especialista autenticado; somente as próprias agendas |
+| `GET` | `/api/agendamentos/horarios/` | Público e somente leitura |
+| `POST` | `/api/agendamentos/consultas/` | Paciente autenticado |
+| `GET` | `/api/agendamentos/consultas/` | Paciente, especialista relacionado, interno ou superusuário |
 
-Consultas não podem ser alteradas ou excluídas pela API. A criação associa automaticamente o paciente autenticado, e a criação da agenda associa automaticamente o especialista autenticado.
+Consultas aceitam apenas criação, listagem e detalhe: não podem ser alteradas nem excluídas pela API. Todas as listagens usam paginação de 20 itens.
+
+### Exemplos de payload
+
+Cadastrar uma especialidade:
+
+```json
+{"nome_especialidade": "Cardiologia"}
+```
+
+Cadastrar um especialista como usuário interno:
+
+```json
+{
+  "usuario": {
+    "username": "dra.ana",
+    "password": "uma-senha-segura",
+    "first_name": "Ana",
+    "last_name": "Silva",
+    "email": "ana@example.com",
+    "cpf": "52998224725",
+    "telefone": "11999998888"
+  },
+  "crm": "CRM-SP 123456",
+  "especialidade": 1
+}
+```
+
+O cadastro de paciente usa o mesmo objeto `usuario`, sem os campos `crm` e `especialidade`.
+
+Criar uma agenda como especialista:
+
+```json
+{
+  "dias_semana": 0,
+  "hora_inicio_expediente": "08:00:00",
+  "hora_fim_expediente": "12:00:00",
+  "quantidade_vagas_dia": 4
+}
+```
+
+`dias_semana` usa `0` para segunda-feira até `6` para domingo. O especialista é obtido do token e não deve ser enviado no payload.
+
+Reservar um horário como paciente:
+
+```json
+{"horario_gerado": 1}
+```
+
+O paciente também é obtido do token.
 
 ### Filtros de horários
 
-O endpoint de horários aceita `status`, `data` e `agenda__especialista`:
+`GET /api/agendamentos/horarios/` aceita os filtros `status`, `data` e `agenda__especialista`:
 
 ```text
-/api/agendamentos/horarios/?status=DISPONIVEL&data=2026-09-01
+/api/agendamentos/horarios/?status=DISPONIVEL&data=2026-09-01&agenda__especialista=1
 ```
 
-As listagens são paginadas em 20 registros por página.
+Os status possíveis são `DISPONIVEL` e `RESERVADO`.
 
-## OpenAPI e Swagger
+## Regras de negócio
 
-Com a API ativa:
+- Cada agenda pertence automaticamente ao especialista autenticado.
+- Uma agenda define um dia da semana, início e fim do expediente e quantidade de vagas por dia.
+- Na criação, são gerados horários para as ocorrências daquele dia da semana nos próximos 30 dias, incluindo o dia atual.
+- O expediente é dividido igualmente pela quantidade de vagas; cada faixa precisa ter pelo menos um segundo.
+- Um especialista não pode manter agendas com intervalos sobrepostos no mesmo dia da semana. Intervalos adjacentes são permitidos.
+- Alterar a grade regenera os horários disponíveis. A grade não pode ser alterada quando já existem reservas.
+- Não é possível reservar horários passados, inativos, pertencentes a agendas/especialistas inativos ou já reservados.
+- Um paciente não pode ter consultas com horários sobrepostos.
+- A reserva bloqueia as linhas do paciente e do horário em uma transação, evitando dupla reserva e conflitos concorrentes.
+- Especialidades são únicas sem diferenciar maiúsculas de minúsculas; CPF, CRM e nome de usuário também são validados e normalizados.
+- A exclusão é lógica. Desativar um perfil também desativa seu usuário; desativar uma agenda ou especialista desativa os horários relacionados.
+
+## Documentação OpenAPI
+
+Com a aplicação em execução:
 
 - Swagger UI: `http://127.0.0.1:8000/api/docs/`
 - Esquema OpenAPI: `http://127.0.0.1:8000/api/schema/`
+- Administração Django: `http://127.0.0.1:8000/admin/`
 
-Para validar o esquema sem iniciar o servidor:
+Valide o esquema sem iniciar o servidor:
 
 ```bash
 python manage.py spectacular --validate --fail-on-warn
 ```
 
-## Regras principais
+## Testes
 
-- Uma agenda pertence ao especialista autenticado.
-- Os horários são distribuídos igualmente dentro do expediente informado.
-- Horários duplicados para a mesma agenda, data e início são impedidos pelo banco.
-- Uma reserva altera o horário de `DISPONIVEL` para `RESERVADO`.
-- A reserva utiliza transação e bloqueio de linha para impedir agendamentos concorrentes.
-- Entidades com soft delete deixam de aparecer nos querysets ativos.
+```bash
+python manage.py test
+```
+
+A suíte cobre permissões, validações cadastrais, exclusão lógica, paginação, geração e regeneração de horários, consultas eficientes, conflitos de agenda, reservas sobrepostas e condições de corrida. Os testes de bloqueio concorrente dependem do PostgreSQL, pois usam `select_for_update`.

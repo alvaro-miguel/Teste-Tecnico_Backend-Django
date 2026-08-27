@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from .models import Especialidade, Agenda, HorarioGerado, Consulta
+from .services import atualizar_agenda, criar_agenda
 
 class EspecialidadeSerializer(serializers.ModelSerializer):
     class Meta:     
@@ -26,7 +27,12 @@ class AgendaSerializer(serializers.ModelSerializer):
             'hora_inicio_expediente', 'hora_fim_expediente', 
             'quantidade_vagas_dia', 'horarios', 'ativo', 'criado_em', 'atualizado_em'
         ]
-        read_only_fields = ['especialista']
+        read_only_fields = [
+            'especialista',
+            'ativo',
+            'criado_em',
+            'atualizado_em',
+        ]
 
     def validate(self, data):
         valores = {
@@ -50,6 +56,12 @@ class AgendaSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(exc.message_dict) from exc
 
         return data
+
+    def create(self, validated_data):
+        return criar_agenda(**validated_data)
+
+    def update(self, instance, validated_data):
+        return atualizar_agenda(instance, validated_data)
 
 
 class ConsultaSerializer(serializers.ModelSerializer):

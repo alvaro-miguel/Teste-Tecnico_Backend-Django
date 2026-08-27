@@ -25,6 +25,7 @@ class AgendaSerializer(serializers.ModelSerializer):
             'hora_inicio_expediente', 'hora_fim_expediente', 
             'quantidade_vagas_dia', 'horarios', 'ativo', 'criado_em', 'atualizado_em'
         ]
+        read_only_fields = ['especialista']
 
     def validate(self, data):
         hora_inicio = data.get('hora_inicio_expediente')

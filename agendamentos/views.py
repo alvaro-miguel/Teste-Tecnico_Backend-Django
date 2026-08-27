@@ -8,7 +8,8 @@ from .serializers import (
 )
 from rest_framework import status
 from rest_framework.response import Response
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist
+from rest_framework.exceptions import ValidationError
 from .services import agendar_consulta, gerar_horarios
 from .permissions import IsEspecialistaOwner, IsPacienteOwner, IsInterno
 from rest_framework.permissions import IsAuthenticated
@@ -30,6 +31,16 @@ class AgendaViewSet(viewsets.ModelViewSet):
         if user.is_authenticated and getattr(user, 'tipo_usuario', None) == 'ESPECIALISTA':
             return Agenda.objects.filter(especialista__usuario=user)
         return Agenda.objects.none()
+
+    def perform_create(self, serializer):
+        try:
+            especialista = self.request.user.especialista_perfil
+        except ObjectDoesNotExist as exc:
+            raise ValidationError({
+                'especialista': 'O usuário autenticado não possui perfil de especialista.'
+            }) from exc
+
+        serializer.save(especialista=especialista)
         
 
 class HorarioGeradoViewSet(viewsets.ReadOnlyModelViewSet):

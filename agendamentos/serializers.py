@@ -8,6 +8,24 @@ class EspecialidadeSerializer(serializers.ModelSerializer):
     class Meta:     
         model = Especialidade
         fields = ['id', 'nome_especialidade', 'ativo', 'criado_em', 'atualizado_em']
+        extra_kwargs = {
+            'nome_especialidade': {'validators': []},
+        }
+
+    def validate_nome_especialidade(self, value):
+        nome = ' '.join(value.split())
+        if not nome:
+            raise serializers.ValidationError(
+                'Este campo não pode ficar em branco.'
+            )
+        especialidade_id = self.instance.id if self.instance else None
+        if Especialidade.all_objects.filter(
+            nome_especialidade__iexact=nome
+        ).exclude(id=especialidade_id).exists():
+            raise serializers.ValidationError(
+                'Já existe uma especialidade com este nome.'
+            )
+        return nome
 
         
 class HorarioGeradoSerializer(serializers.ModelSerializer):

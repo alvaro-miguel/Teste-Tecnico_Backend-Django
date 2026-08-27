@@ -50,8 +50,12 @@ class AgendaSerializer(serializers.ModelSerializer):
         }
         valores.update(data)
 
+        agenda = Agenda(**valores)
+        if self.instance:
+            agenda.pk = self.instance.pk
+
         try:
-            Agenda(**valores).clean()
+            agenda.clean()
         except DjangoValidationError as exc:
             raise serializers.ValidationError(exc.message_dict) from exc
 

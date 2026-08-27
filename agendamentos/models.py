@@ -67,6 +67,23 @@ class Agenda(CommonModel):
                     )
                 })
 
+        if self.ativo and self.especialista_id and self.dias_semana is not None:
+            agendas_conflitantes = Agenda.objects.filter(
+                especialista_id=self.especialista_id,
+                dias_semana=self.dias_semana,
+                hora_inicio_expediente__lt=self.hora_fim_expediente,
+                hora_fim_expediente__gt=self.hora_inicio_expediente,
+            )
+            if self.pk:
+                agendas_conflitantes = agendas_conflitantes.exclude(pk=self.pk)
+
+            if agendas_conflitantes.exists():
+                raise ValidationError({
+                    'hora_inicio_expediente': (
+                        'O especialista já possui uma agenda nesse intervalo.'
+                    )
+                })
+
 
     def __str__(self):
         return f"Agenda: {self.especialista} - {self.get_dias_semana_display()}"

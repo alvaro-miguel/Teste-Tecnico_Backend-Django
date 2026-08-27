@@ -7,6 +7,7 @@ from usuarios.models import Usuario, Paciente, Especialista
 from agendamentos.models import Especialidade, Agenda, HorarioGerado
 from datetime import time, date
 import concurrent.futures
+import threading
 from unittest.mock import patch
 
 from agendamentos.services import agendar_consulta, atualizar_agenda, criar_agenda
@@ -121,6 +122,89 @@ class AgendamentoTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('quantidade_vagas_dia', response.data)
+
+    def test_rejeita_agenda_sobreposta_do_mesmo_especialista(self):
+        self.client.force_authenticate(user=self.usuario_especialista)
+
+        response = self.client.post(reverse('agenda-list'), {
+            'dias_semana': 0,
+            'hora_inicio_expediente': '09:00:00',
+            'hora_fim_expediente': '10:00:00',
+            'quantidade_vagas_dia': 2,
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('hora_inicio_expediente', response.data)
+
+    def test_permite_agendas_adjacentes_do_mesmo_especialista(self):
+        self.client.force_authenticate(user=self.usuario_especialista)
+
+        response = self.client.post(reverse('agenda-list'), {
+            'dias_semana': 0,
+            'hora_inicio_expediente': '18:00:00',
+            'hora_fim_expediente': '19:00:00',
+            'quantidade_vagas_dia': 2,
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_permite_mesmo_intervalo_em_dias_diferentes(self):
+        self.client.force_authenticate(user=self.usuario_especialista)
+
+        response = self.client.post(reverse('agenda-list'), {
+            'dias_semana': 1,
+            'hora_inicio_expediente': '08:00:00',
+            'hora_fim_expediente': '18:00:00',
+            'quantidade_vagas_dia': 10,
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_permite_mesmo_intervalo_para_especialistas_diferentes(self):
+        outro_usuario = Usuario.objects.create_user(
+            username='dr_outro',
+            password='123',
+            tipo_usuario='ESPECIALISTA',
+        )
+        Especialista.objects.create(
+            usuario=outro_usuario,
+            especialidade=self.especialidade,
+            crm='54321',
+        )
+        self.client.force_authenticate(user=outro_usuario)
+
+        response = self.client.post(reverse('agenda-list'), {
+            'dias_semana': 0,
+            'hora_inicio_expediente': '08:00:00',
+            'hora_fim_expediente': '18:00:00',
+            'quantidade_vagas_dia': 10,
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_rejeita_atualizacao_que_sobrepoe_outra_agenda(self):
+        agenda = criar_agenda(
+            especialista=self.especialista,
+            dias_semana=1,
+            hora_inicio_expediente=time(8, 0),
+            hora_fim_expediente=time(10, 0),
+            quantidade_vagas_dia=2,
+        )
+        self.client.force_authenticate(user=self.usuario_especialista)
+
+        response = self.client.patch(
+            reverse('agenda-detail', args=[agenda.id]),
+            {
+                'dias_semana': 0,
+                'hora_inicio_expediente': '09:00:00',
+                'hora_fim_expediente': '11:00:00',
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('hora_inicio_expediente', response.data)
+        agenda.refresh_from_db()
+        self.assertEqual(agenda.dias_semana, 1)
 
     def test_banco_rejeita_horario_duplicado(self):
         with self.assertRaises(IntegrityError), transaction.atomic():
@@ -323,3 +407,41 @@ class RaceConditionCase(APITransactionTestCase):
             from agendamentos.models import Consulta
             consultas_criadas = Consulta.objects.filter(horario_gerado=self.horario).count()
             self.assertEqual(consultas_criadas, 1)
+
+    @skipUnlessDBFeature('has_select_for_update')
+    def test_criacao_concorrente_nao_permite_agendas_sobrepostas(self):
+        barreira = threading.Barrier(2)
+
+        def criar(inicio, fim):
+            try:
+                especialista = Especialista.objects.get(pk=self.especialista.pk)
+                barreira.wait()
+                criar_agenda(
+                    especialista=especialista,
+                    dias_semana=1,
+                    hora_inicio_expediente=inicio,
+                    hora_fim_expediente=fim,
+                    quantidade_vagas_dia=2,
+                )
+                return True
+            except ValidationError:
+                return False
+            finally:
+                connection.close()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            resultados = [
+                executor.submit(criar, time(8, 0), time(10, 0)),
+                executor.submit(criar, time(9, 0), time(11, 0)),
+            ]
+            sucessos = [resultado.result() for resultado in resultados]
+
+        self.assertEqual(sucessos.count(True), 1)
+        self.assertEqual(sucessos.count(False), 1)
+        self.assertEqual(
+            Agenda.objects.filter(
+                especialista=self.especialista,
+                dias_semana=1,
+            ).count(),
+            1,
+        )

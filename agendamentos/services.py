@@ -1,6 +1,7 @@
 
 from datetime import datetime, date, timedelta
 from .models import Agenda, HorarioGerado, Consulta, StatusHorario
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from rest_framework.exceptions import ValidationError
 
@@ -12,8 +13,21 @@ CAMPOS_GRADE_AGENDA = {
     'quantidade_vagas_dia',
 }
 
+
+def _bloquear_especialista(especialista_id):
+    from usuarios.models import Especialista
+
+    return Especialista.objects.select_for_update().get(pk=especialista_id)
+
+
+def _validar_agenda(agenda):
+    try:
+        agenda.full_clean()
+    except DjangoValidationError as exc:
+        raise ValidationError(exc.message_dict) from exc
+
 def gerar_horarios(agenda):
-    agenda.full_clean()
+    _validar_agenda(agenda)
 
     data_base = date.today()
     horarios_criar = []
@@ -50,7 +64,8 @@ def gerar_horarios(agenda):
 @transaction.atomic
 def criar_agenda(**dados_agenda):
     agenda = Agenda(**dados_agenda)
-    agenda.full_clean()
+    agenda.especialista = _bloquear_especialista(agenda.especialista_id)
+    _validar_agenda(agenda)
     agenda.save()
     gerar_horarios(agenda)
     return agenda
@@ -58,6 +73,7 @@ def criar_agenda(**dados_agenda):
 
 @transaction.atomic
 def atualizar_agenda(instance, dados_agenda):
+    _bloquear_especialista(instance.especialista_id)
     agenda = Agenda.objects.select_for_update().get(pk=instance.pk)
     grade_alterada = any(
         campo in dados_agenda and getattr(agenda, campo) != dados_agenda[campo]
@@ -84,7 +100,7 @@ def atualizar_agenda(instance, dados_agenda):
     for campo, valor in dados_agenda.items():
         setattr(agenda, campo, valor)
 
-    agenda.full_clean()
+    _validar_agenda(agenda)
     agenda.save()
 
     if grade_alterada:

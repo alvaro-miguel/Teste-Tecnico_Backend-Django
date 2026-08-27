@@ -1,10 +1,20 @@
-from django.db import models
+from django.db import models, router, transaction
 
 # Create your models here.
 
 class SoftDeleteQuerySet(models.QuerySet):
+    @transaction.atomic
     def delete(self):
-        return self.update(ativo=False)
+        quantidade_total = 0
+        detalhes = {}
+
+        for objeto in self.select_for_update():
+            quantidade, detalhes_objeto = objeto.delete(using=self.db)
+            quantidade_total += quantidade
+            for modelo, total in detalhes_objeto.items():
+                detalhes[modelo] = detalhes.get(modelo, 0) + total
+
+        return quantidade_total, detalhes
 
 
 class ActiveManager(models.Manager):
@@ -23,6 +33,15 @@ class CommonModel(models.Model):
         abstract = True
 
     def delete(self, *args, **kwargs):
+        if not self.ativo:
+            return 0, {}
+
+        using = kwargs.get('using') or router.db_for_write(
+            self.__class__,
+            instance=self,
+        )
         self.ativo = False
-        self.save()
+        self.save(using=using, update_fields=['ativo', 'atualizado_em'])
+        modelo = self._meta.label
+        return 1, {modelo: 1}
 

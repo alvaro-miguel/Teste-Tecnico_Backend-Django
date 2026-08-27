@@ -296,6 +296,23 @@ class AgendamentoTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('horario_gerado', response.data)
 
+    def test_horario_de_agenda_inativa_nao_aparece_na_listagem(self):
+        horario_id = self.horario.id
+        self.agenda.delete()
+        self.client.force_authenticate(user=None)
+
+        response = self.client.get(reverse('horariogerado-list'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids_retornados = [item['id'] for item in response.data['results']]
+        self.assertNotIn(horario_id, ids_retornados)
+        self.assertTrue(
+            HorarioGerado.all_objects.filter(
+                pk=horario_id,
+                ativo=False,
+            ).exists()
+        )
+
     def test_atualizacao_da_agenda_regenera_horarios_disponiveis(self):
         self.client.force_authenticate(user=self.usuario_especialista)
         response_criacao = self.client.post(reverse('agenda-list'), {

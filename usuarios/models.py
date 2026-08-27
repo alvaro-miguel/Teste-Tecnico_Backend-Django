@@ -6,11 +6,13 @@ from core.models import CommonModel
 
 class DesativaUsuarioMixin:
     def delete(self, *args, **kwargs):
-        super().delete(*args, **kwargs)
+        resultado = super().delete(*args, **kwargs)
 
-        if hasattr(self, 'usuario') and self.usuario:
+        if resultado[0] and hasattr(self, 'usuario') and self.usuario:
             self.usuario.is_active = False
-            self.usuario.save()
+            self.usuario.save(update_fields=['is_active'])
+
+        return resultado
 
 
 class TipoUsuario(models.TextChoices):
@@ -38,6 +40,16 @@ class Especialista(DesativaUsuarioMixin, CommonModel):
     usuario = models.OneToOneField(Usuario, on_delete=models.CASCADE, related_name='especialista_perfil')
     especialidade = models.ForeignKey('agendamentos.Especialidade', on_delete=models.PROTECT, related_name='especialistas')
     crm = models.CharField(max_length=20, unique=True)
+
+    def delete(self, *args, **kwargs):
+        quantidade_agendas, detalhes_agendas = self.agendas.all().delete()
+        quantidade_perfil, detalhes_perfil = super().delete(*args, **kwargs)
+
+        detalhes = detalhes_agendas.copy()
+        for modelo, total in detalhes_perfil.items():
+            detalhes[modelo] = detalhes.get(modelo, 0) + total
+
+        return quantidade_agendas + quantidade_perfil, detalhes
 
     def __str__(self):
         return f"Dr(a). {self.usuario.first_name} - CRM: {self.crm}"

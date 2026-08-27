@@ -43,7 +43,11 @@ from agendamentos.permissions import IsInterno, IsInternoOrReadOnly
 )
 class EspecialistaViewSet(viewsets.ModelViewSet):
     permission_classes = [IsInternoOrReadOnly]
-    queryset = Especialista.objects.all()
+    queryset = (
+        Especialista.objects
+        .select_related('usuario', 'especialidade')
+        .order_by('usuario__first_name', 'id')
+    )
     serializer_class = EspecialistaSerializer
 
 @extend_schema_view(
@@ -83,5 +87,9 @@ class EspecialistaViewSet(viewsets.ModelViewSet):
 )
 class PacienteViewSet(viewsets.ModelViewSet):
     permission_classes = [IsInterno]
-    queryset = Paciente.objects.all()
+    queryset = (
+        Paciente.objects
+        .select_related('usuario')
+        .order_by('usuario__first_name', 'id')
+    )
     serializer_class = PacienteSerializer

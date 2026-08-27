@@ -334,7 +334,8 @@ class AgendamentoTestCase(APITestCase):
         self.agenda.delete()
         self.client.force_authenticate(user=None)
 
-        response = self.client.get(reverse('horariogerado-list'))
+        with self.assertNumQueries(1):
+            response = self.client.get(reverse('horariogerado-list'))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         ids_retornados = [item['id'] for item in response.data['results']]
@@ -345,6 +346,28 @@ class AgendamentoTestCase(APITestCase):
                 ativo=False,
             ).exists()
         )
+
+    def test_listagem_de_consultas_evitar_n_mais_um(self):
+        Consulta.objects.create(
+            paciente=self.paciente,
+            horario_gerado=self.horario,
+        )
+
+        with self.assertNumQueries(2):
+            response = self.client.get(reverse('consulta-list'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+
+    def test_listagem_de_agendas_carregar_horarios_em_lote(self):
+        self.client.force_authenticate(user=self.usuario_especialista)
+
+        with self.assertNumQueries(3):
+            response = self.client.get(reverse('agenda-list'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(len(response.data['results'][0]['horarios']), 1)
 
     def test_atualizacao_da_agenda_regenera_horarios_disponiveis(self):
         self.client.force_authenticate(user=self.usuario_especialista)

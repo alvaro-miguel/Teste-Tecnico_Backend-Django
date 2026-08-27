@@ -32,7 +32,7 @@ class AgendaViewSet(viewsets.ModelViewSet):
         return Agenda.objects.none()
         
 
-class HorarioGeradoViewSet(viewsets.ModelViewSet):
+class HorarioGeradoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = HorarioGerado.objects.all()
     serializer_class = HorarioGeradoSerializer
     filter_backends = [DjangoFilterBackend]

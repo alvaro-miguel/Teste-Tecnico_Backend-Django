@@ -47,12 +47,45 @@ class AgendamentoTestCase(APITestCase):
     def test_paciente_agendar_horario_livre(self):
         payload = {
             "paciente": self.paciente.id,
-            "horario_gerado": self.horario.id
+            "horario_gerado": self.horario.id,
+            "ativo": False,
         }
         response = self.client.post(self.url_consulta, payload)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.horario.refresh_from_db()
         self.assertEqual(self.horario.status, 'RESERVADO')
+        consulta = Consulta.objects.get(horario_gerado=self.horario)
+        self.assertTrue(consulta.ativo)
+
+    def test_consulta_nao_disponibiliza_alteracao_ou_exclusao(self):
+        consulta = Consulta.objects.create(
+            paciente=self.paciente,
+            horario_gerado=self.horario,
+        )
+        url = reverse('consulta-detail', args=[consulta.pk])
+
+        self.assertEqual(
+            self.client.put(url, {'horario_gerado': self.horario.pk}).status_code,
+            status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+        self.assertEqual(
+            self.client.patch(url, {'ativo': False}).status_code,
+            status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+        self.assertEqual(
+            self.client.delete(url).status_code,
+            status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+    def test_openapi_nao_documenta_metodos_indisponiveis_de_consulta(self):
+        response = self.client.get(
+            reverse('schema'),
+            HTTP_ACCEPT='application/vnd.oai.openapi+json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        metodos = response.json()['paths']['/api/agendamentos/consultas/{id}/']
+        self.assertEqual(set(metodos), {'get'})
 
 
     def test_paciente_nao_agendar_horario_ocupado(self):

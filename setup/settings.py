@@ -165,4 +165,5 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'Documentação oficial da API para o teste técnico',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
 }

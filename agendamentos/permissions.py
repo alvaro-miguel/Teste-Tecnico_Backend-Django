@@ -42,6 +42,9 @@ class ConsultaPermission(permissions.BasePermission):
         if not user or not user.is_authenticated:
             return False
 
+        if view.action is None:
+            return True
+
         if view.action == 'create':
             return getattr(user, 'tipo_usuario', None) == 'PACIENTE'
 

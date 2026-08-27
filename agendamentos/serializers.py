@@ -1,6 +1,7 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
+
 from .models import Especialidade, Agenda, HorarioGerado, Consulta
-from usuarios.models import Usuario, Especialista, Paciente
 
 class EspecialidadeSerializer(serializers.ModelSerializer):
     class Meta:     
@@ -28,13 +29,26 @@ class AgendaSerializer(serializers.ModelSerializer):
         read_only_fields = ['especialista']
 
     def validate(self, data):
-        hora_inicio = data.get('hora_inicio_expediente')
-        hora_fim = data.get('hora_fim_expediente')
+        valores = {
+            'especialista': getattr(self.instance, 'especialista', None),
+            'dias_semana': getattr(self.instance, 'dias_semana', None),
+            'hora_inicio_expediente': getattr(
+                self.instance, 'hora_inicio_expediente', None
+            ),
+            'hora_fim_expediente': getattr(
+                self.instance, 'hora_fim_expediente', None
+            ),
+            'quantidade_vagas_dia': getattr(
+                self.instance, 'quantidade_vagas_dia', None
+            ),
+        }
+        valores.update(data)
 
-        if hora_inicio and hora_fim and hora_inicio >= hora_fim:
-            raise serializers.ValidationError(
-                {"hora_inicio_expediente": "A hora de início deve ser menor que a hora de término."}
-            )
+        try:
+            Agenda(**valores).clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
+
         return data
 
 

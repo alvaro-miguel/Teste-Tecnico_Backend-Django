@@ -2,7 +2,7 @@
 from datetime import datetime, date, timedelta
 from .models import HorarioGerado, Consulta
 from django.db import transaction
-from django.core.exceptions import ValidationError
+from rest_framework import ValidationError
 
 def gerar_horarios(agenda):
     data_base = date.today()

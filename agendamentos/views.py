@@ -46,7 +46,11 @@ class AgendaViewSet(viewsets.ModelViewSet):
         
 
 class HorarioGeradoViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = HorarioGerado.objects.all()
+    queryset = HorarioGerado.objects.filter(
+        agenda__ativo=True,
+        agenda__especialista__ativo=True,
+        agenda__especialista__usuario__is_active=True,
+    )
     serializer_class = HorarioGeradoSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['status', 'data', 'agenda__especialista']

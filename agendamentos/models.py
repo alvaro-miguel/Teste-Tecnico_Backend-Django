@@ -41,6 +41,16 @@ class Agenda(CommonModel):
     hora_fim_expediente = models.TimeField()
     quantidade_vagas_dia = models.IntegerField(validators=[MinValueValidator(1)])
 
+    def delete(self, *args, **kwargs):
+        quantidade_horarios, detalhes_horarios = self.horarios.all().delete()
+        quantidade_agenda, detalhes_agenda = super().delete(*args, **kwargs)
+
+        detalhes = detalhes_horarios.copy()
+        for modelo, total in detalhes_agenda.items():
+            detalhes[modelo] = detalhes.get(modelo, 0) + total
+
+        return quantidade_horarios + quantidade_agenda, detalhes
+
     def clean(self):
         super().clean()
 

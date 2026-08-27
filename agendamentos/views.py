@@ -65,7 +65,13 @@ class ConsultaViewSet(viewsets.ModelViewSet):
         return Consulta.objects.none()
 
     def perform_create(self, serializer):
-        paciente = serializer.validated_data.get('paciente')
+        try:
+            paciente = self.request.user.paciente_perfil
+        except ObjectDoesNotExist as exc:
+            raise ValidationError({
+                'paciente': 'O usuário autenticado não possui perfil de paciente.'
+            }) from exc
+
         horario = serializer.validated_data.get('horario_gerado')
         
         consulta = agendar_consulta(paciente.id, horario.id)

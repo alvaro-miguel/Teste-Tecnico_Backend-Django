@@ -1,13 +1,14 @@
 from rest_framework.test import APITestCase, APITransactionTestCase
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from django.urls import reverse
+from django.test import skipUnlessDBFeature
 from usuarios.models import Usuario, Paciente, Especialista
 from agendamentos.models import Especialidade, Agenda, HorarioGerado
 from datetime import time, date
 import concurrent.futures
 from agendamentos.services import agendar_consulta
-from django.core.exceptions import ValidationError
-from django.db import connection
+from django.db import IntegrityError, connection, transaction
 # Create your tests here.
 
 class AgendamentoTestCase(APITestCase):
@@ -119,6 +120,34 @@ class AgendamentoTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('quantidade_vagas_dia', response.data)
 
+    def test_banco_rejeita_horario_duplicado(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            HorarioGerado.objects.create(
+                agenda=self.agenda,
+                data=self.horario.data,
+                horario_inicio=self.horario.horario_inicio,
+                horario_fim=self.horario.horario_fim,
+            )
+
+    def test_banco_rejeita_horario_com_fim_anterior_ao_inicio(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            HorarioGerado.objects.create(
+                agenda=self.agenda,
+                data=date(2025, 1, 2),
+                horario_inicio=time(10, 0),
+                horario_fim=time(9, 0),
+            )
+
+    def test_nao_agenda_horario_de_agenda_inativa(self):
+        self.agenda.delete()
+
+        response = self.client.post(self.url_consulta, {
+            'horario_gerado': self.horario.id,
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('horario_gerado', response.data)
+
 
 class RaceConditionCase(APITransactionTestCase):
     def setUp(self):
@@ -142,6 +171,7 @@ class RaceConditionCase(APITransactionTestCase):
         )
 
 
+    @skipUnlessDBFeature('has_select_for_update')
     def test_duplo_agendamento(self):
 
         def tentativa_agendamento(paciente_id, horario_id):
@@ -149,8 +179,6 @@ class RaceConditionCase(APITransactionTestCase):
                 agendar_consulta(paciente_id, horario_id)
                 return True
             except ValidationError:
-                return False
-            except Exception:
                 return False
             finally:
                 connection.close()

@@ -1,7 +1,7 @@
 
 from datetime import datetime, date, timedelta
 from .models import HorarioGerado, Consulta, StatusHorario
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from rest_framework.exceptions import ValidationError
 
 def gerar_horarios(agenda):
@@ -41,17 +41,36 @@ def gerar_horarios(agenda):
 
 def agendar_consulta(paciente_id, horario_id):
     with transaction.atomic():
-        horario = HorarioGerado.objects.select_for_update().get(id=horario_id)
+        try:
+            horario = (
+                HorarioGerado.objects
+                .select_for_update()
+                .get(
+                    id=horario_id,
+                    agenda__ativo=True,
+                    agenda__especialista__ativo=True,
+                    agenda__especialista__usuario__is_active=True,
+                )
+            )
+        except HorarioGerado.DoesNotExist as exc:
+            raise ValidationError({
+                'horario_gerado': 'Horário não encontrado ou indisponível.'
+            }) from exc
 
-        if horario.status != 'DISPONIVEL':
-            raise ValidationError({"erro":"Este horário não está disponível"})
+        if horario.status != StatusHorario.DISPONIVEL:
+            raise ValidationError({'erro': 'Este horário não está disponível.'})
 
-        horario.status = 'RESERVADO'
-        horario.save()
+        horario.status = StatusHorario.RESERVADO
+        horario.save(update_fields=['status', 'atualizado_em'])
 
-        consulta = Consulta.objects.create(
-            paciente_id = paciente_id,
-            horario_gerado = horario
-        )
+        try:
+            consulta = Consulta.objects.create(
+                paciente_id=paciente_id,
+                horario_gerado=horario,
+            )
+        except IntegrityError as exc:
+            raise ValidationError({
+                'erro': 'Este horário não está disponível.'
+            }) from exc
 
         return consulta

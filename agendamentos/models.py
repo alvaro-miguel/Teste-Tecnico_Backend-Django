@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from django.db import models
+from django.db.models import F, Q
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
@@ -83,6 +84,18 @@ class HorarioGerado(CommonModel):
         default=StatusHorario.DISPONIVEL,
         db_index=True
     )
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(horario_fim__gt=F('horario_inicio')),
+                name='horario_fim_posterior_inicio',
+            ),
+            models.UniqueConstraint(
+                fields=['agenda', 'data', 'horario_inicio'],
+                name='horario_unico_por_agenda_data_inicio',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.agenda.especialista} | {self.horario_inicio}/{self.horario_fim} - {self.status}"

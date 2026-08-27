@@ -1,4 +1,5 @@
-from rest_framework import viewsets
+from rest_framework import mixins, viewsets
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from .models import Especialidade, Agenda, HorarioGerado, Consulta
 from .serializers import (
     EspecialidadeSerializer, 
@@ -17,12 +18,87 @@ from .permissions import (
 )
 from django_filters.rest_framework import DjangoFilterBackend
 
+@extend_schema_view(
+    list=extend_schema(
+        summary='Listar especialidades',
+        description='Lista pública das especialidades ativas.',
+        auth=[],
+        tags=['Especialidades'],
+    ),
+    retrieve=extend_schema(
+        summary='Consultar especialidade',
+        description='Retorna uma especialidade ativa pelo identificador.',
+        auth=[],
+        tags=['Especialidades'],
+    ),
+    create=extend_schema(
+        summary='Cadastrar especialidade',
+        description='Operação restrita a usuários internos e superusuários.',
+        tags=['Especialidades'],
+    ),
+    update=extend_schema(
+        summary='Substituir especialidade',
+        description='Operação restrita a usuários internos e superusuários.',
+        tags=['Especialidades'],
+    ),
+    partial_update=extend_schema(
+        summary='Alterar especialidade',
+        description='Operação restrita a usuários internos e superusuários.',
+        tags=['Especialidades'],
+    ),
+    destroy=extend_schema(
+        summary='Desativar especialidade',
+        description=(
+            'Realiza exclusão lógica. Restrita a usuários internos e '
+            'superusuários.'
+        ),
+        tags=['Especialidades'],
+    ),
+)
 class EspecialidadeViewSet(viewsets.ModelViewSet):
     permission_classes = [IsInternoOrReadOnly]
     queryset = Especialidade.objects.all()
     serializer_class = EspecialidadeSerializer
 
 
+@extend_schema_view(
+    list=extend_schema(
+        summary='Listar minhas agendas',
+        description='Lista somente as agendas do especialista autenticado.',
+        tags=['Agendas'],
+    ),
+    retrieve=extend_schema(
+        summary='Consultar minha agenda',
+        description='Retorna uma agenda do especialista autenticado.',
+        tags=['Agendas'],
+    ),
+    create=extend_schema(
+        summary='Criar agenda',
+        description=(
+            'Cria uma agenda para o especialista autenticado e gera '
+            'automaticamente os horários dos próximos 30 dias.'
+        ),
+        tags=['Agendas'],
+    ),
+    update=extend_schema(
+        summary='Substituir agenda',
+        description='Substitui uma agenda do especialista autenticado.',
+        tags=['Agendas'],
+    ),
+    partial_update=extend_schema(
+        summary='Alterar agenda',
+        description=(
+            'Altera uma agenda própria. A grade não pode ser alterada quando '
+            'já existem reservas.'
+        ),
+        tags=['Agendas'],
+    ),
+    destroy=extend_schema(
+        summary='Desativar agenda',
+        description='Realiza a exclusão lógica da agenda e de seus horários.',
+        tags=['Agendas'],
+    ),
+)
 class AgendaViewSet(viewsets.ModelViewSet):
     permission_classes = [IsEspecialistaOwner]
     queryset = Agenda.objects.all()
@@ -45,6 +121,23 @@ class AgendaViewSet(viewsets.ModelViewSet):
         serializer.save(especialista=especialista)
         
 
+@extend_schema_view(
+    list=extend_schema(
+        summary='Listar horários',
+        description=(
+            'Lista pública dos horários ativos. Permite filtrar por status, '
+            'data e especialista.'
+        ),
+        auth=[],
+        tags=['Horários'],
+    ),
+    retrieve=extend_schema(
+        summary='Consultar horário',
+        description='Retorna um horário ativo pelo identificador.',
+        auth=[],
+        tags=['Horários'],
+    ),
+)
 class HorarioGeradoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = HorarioGerado.objects.filter(
         agenda__ativo=True,
@@ -56,7 +149,35 @@ class HorarioGeradoViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ['status', 'data', 'agenda__especialista']
 
 
-class ConsultaViewSet(viewsets.ModelViewSet):
+@extend_schema_view(
+    list=extend_schema(
+        summary='Listar consultas acessíveis',
+        description=(
+            'Pacientes veem as próprias consultas; especialistas veem as '
+            'consultas de suas agendas; usuários internos veem todas.'
+        ),
+        tags=['Consultas'],
+    ),
+    retrieve=extend_schema(
+        summary='Consultar agendamento',
+        description='Retorna uma consulta conforme o vínculo do usuário.',
+        tags=['Consultas'],
+    ),
+    create=extend_schema(
+        summary='Agendar consulta',
+        description=(
+            'Reserva um horário para o paciente autenticado. O paciente é '
+            'definido pelo token JWT.'
+        ),
+        tags=['Consultas'],
+    ),
+)
+class ConsultaViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
     permission_classes = [ConsultaPermission]
     queryset = Consulta.objects.all()
     serializer_class = ConsultaSerializer

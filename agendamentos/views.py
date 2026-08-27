@@ -12,7 +12,6 @@ from django.core.exceptions import ValidationError
 from .services import agendar_consulta, gerar_horarios
 from .permissions import IsEspecialistaOwner, IsPacienteOwner, IsInterno
 from rest_framework.permissions import IsAuthenticated
-from .permissions import IsEspecialistaOwner, IsPacienteOwner
 from django_filters.rest_framework import DjangoFilterBackend
 
 class EspecialidadeViewSet(viewsets.ModelViewSet):
@@ -30,17 +29,6 @@ class AgendaViewSet(viewsets.ModelViewSet):
         if user.is_authenticated and getattr(user, 'tipo_usuario', None) == 'ESPECIALISTA':
             return Agenda.objects.filter(especialista__usuario=user)
         return Agenda.objects.none()
-
-    def perform_create(self, serializer):
-        agenda = serializer.save()
-        gerar_horarios(agenda)
-
-    queryset = Agenda.objects.all()
-    serializer_class = AgendaSerializer
-
-    def perform_create(self, serializer):
-        agenda = serializer.save()
-        gerar_horarios(agenda)
         
 
 class HorarioGeradoViewSet(viewsets.ModelViewSet):
@@ -49,9 +37,6 @@ class HorarioGeradoViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['status', 'data', 'agenda__especialista']
 
-
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['status', 'data', 'agenda__especialista']
 
 class ConsultaViewSet(viewsets.ModelViewSet):
     permission_classes = [IsPacienteOwner]

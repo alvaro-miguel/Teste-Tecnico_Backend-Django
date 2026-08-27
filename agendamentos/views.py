@@ -6,17 +6,19 @@ from .serializers import (
     HorarioGeradoSerializer, 
     ConsultaSerializer
 )
-from rest_framework import status
-from rest_framework.response import Response
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework.exceptions import ValidationError
-from .services import agendar_consulta, gerar_horarios
-from .permissions import IsEspecialistaOwner, IsPacienteOwner, IsInterno
-from rest_framework.permissions import IsAuthenticated
+from .services import agendar_consulta
+from .permissions import (
+    ConsultaPermission,
+    IsEspecialistaOwner,
+    IsInternoOrReadOnly,
+    is_usuario_interno,
+)
 from django_filters.rest_framework import DjangoFilterBackend
 
 class EspecialidadeViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsInterno]
+    permission_classes = [IsInternoOrReadOnly]
     queryset = Especialidade.objects.all()
     serializer_class = EspecialidadeSerializer
 
@@ -51,17 +53,20 @@ class HorarioGeradoViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class ConsultaViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsPacienteOwner]
+    permission_classes = [ConsultaPermission]
     queryset = Consulta.objects.all()
     serializer_class = ConsultaSerializer
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_authenticated:
-            if getattr(user, 'tipo_usuario', None) == 'PACIENTE':
-                return Consulta.objects.filter(paciente__usuario=user)
-            elif getattr(user, 'tipo_usuario', None) == 'ESPECIALISTA':
-                return Consulta.objects.filter(horario_gerado__agenda__especialista__usuario=user)
+        if is_usuario_interno(user):
+            return Consulta.objects.all()
+        if getattr(user, 'tipo_usuario', None) == 'PACIENTE':
+            return Consulta.objects.filter(paciente__usuario=user)
+        if getattr(user, 'tipo_usuario', None) == 'ESPECIALISTA':
+            return Consulta.objects.filter(
+                horario_gerado__agenda__especialista__usuario=user
+            )
         return Consulta.objects.none()
 
     def perform_create(self, serializer):

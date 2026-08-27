@@ -237,3 +237,35 @@ class ValidacaoCadastroAPITestCase(APITestCase):
             status.HTTP_400_BAD_REQUEST,
         )
         self.assertIn('nome_especialidade', resposta_duplicada.data)
+
+    def test_listagem_de_pacientes_evitar_n_mais_um(self):
+        for indice in range(5):
+            usuario = Usuario.objects.create_user(
+                username=f'paciente.performance.{indice}',
+                first_name=f'Paciente {indice}',
+            )
+            Paciente.objects.create(usuario=usuario)
+
+        with self.assertNumQueries(2):
+            resposta = self.client.get(reverse('paciente-list'))
+
+        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        self.assertEqual(resposta.data['count'], 5)
+
+    def test_listagem_de_especialistas_evitar_n_mais_um(self):
+        for indice in range(5):
+            usuario = Usuario.objects.create_user(
+                username=f'especialista.performance.{indice}',
+                first_name=f'Especialista {indice}',
+            )
+            Especialista.objects.create(
+                usuario=usuario,
+                especialidade=self.especialidade,
+                crm=f'PERFORMANCE-{indice}',
+            )
+
+        with self.assertNumQueries(2):
+            resposta = self.client.get(reverse('especialista-list'))
+
+        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        self.assertEqual(resposta.data['count'], 5)

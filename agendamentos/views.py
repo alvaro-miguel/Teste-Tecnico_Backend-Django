@@ -8,6 +8,7 @@ from .serializers import (
     ConsultaSerializer
 )
 from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import Prefetch
 from rest_framework.exceptions import ValidationError
 from .services import agendar_consulta
 from .permissions import (
@@ -57,7 +58,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 )
 class EspecialidadeViewSet(viewsets.ModelViewSet):
     permission_classes = [IsInternoOrReadOnly]
-    queryset = Especialidade.objects.all()
+    queryset = Especialidade.objects.order_by('nome_especialidade', 'id')
     serializer_class = EspecialidadeSerializer
 
 
@@ -101,14 +102,28 @@ class EspecialidadeViewSet(viewsets.ModelViewSet):
 )
 class AgendaViewSet(viewsets.ModelViewSet):
     permission_classes = [IsEspecialistaOwner]
-    queryset = Agenda.objects.all()
+    queryset = (
+        Agenda.objects
+        .select_related('especialista__usuario')
+        .prefetch_related(
+            Prefetch(
+                'horarios',
+                queryset=HorarioGerado.objects.order_by(
+                    'data',
+                    'horario_inicio',
+                    'id',
+                ),
+            )
+        )
+        .order_by('dias_semana', 'hora_inicio_expediente', 'id')
+    )
     serializer_class = AgendaSerializer
 
     def get_queryset(self):
         user = self.request.user
         if user.is_authenticated and getattr(user, 'tipo_usuario', None) == 'ESPECIALISTA':
-            return Agenda.objects.filter(especialista__usuario=user)
-        return Agenda.objects.none()
+            return self.queryset.filter(especialista__usuario=user)
+        return self.queryset.none()
 
     def perform_create(self, serializer):
         try:
@@ -139,10 +154,14 @@ class AgendaViewSet(viewsets.ModelViewSet):
     ),
 )
 class HorarioGeradoViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = HorarioGerado.objects.filter(
-        agenda__ativo=True,
-        agenda__especialista__ativo=True,
-        agenda__especialista__usuario__is_active=True,
+    queryset = (
+        HorarioGerado.objects
+        .filter(
+            agenda__ativo=True,
+            agenda__especialista__ativo=True,
+            agenda__especialista__usuario__is_active=True,
+        )
+        .order_by('data', 'horario_inicio', 'id')
     )
     serializer_class = HorarioGeradoSerializer
     filter_backends = [DjangoFilterBackend]
@@ -179,20 +198,31 @@ class ConsultaViewSet(
     viewsets.GenericViewSet,
 ):
     permission_classes = [ConsultaPermission]
-    queryset = Consulta.objects.all()
+    queryset = (
+        Consulta.objects
+        .select_related(
+            'paciente__usuario',
+            'horario_gerado__agenda__especialista__usuario',
+        )
+        .order_by(
+            'horario_gerado__data',
+            'horario_gerado__horario_inicio',
+            'id',
+        )
+    )
     serializer_class = ConsultaSerializer
 
     def get_queryset(self):
         user = self.request.user
         if is_usuario_interno(user):
-            return Consulta.objects.all()
+            return self.queryset.all()
         if getattr(user, 'tipo_usuario', None) == 'PACIENTE':
-            return Consulta.objects.filter(paciente__usuario=user)
+            return self.queryset.filter(paciente__usuario=user)
         if getattr(user, 'tipo_usuario', None) == 'ESPECIALISTA':
-            return Consulta.objects.filter(
+            return self.queryset.filter(
                 horario_gerado__agenda__especialista__usuario=user
             )
-        return Consulta.objects.none()
+        return self.queryset.none()
 
     def perform_create(self, serializer):
         try:

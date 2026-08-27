@@ -61,5 +61,5 @@ class ConsultaSerializer(serializers.ModelSerializer):
         fields = ['id', 'paciente', 'nome_paciente', 'horario_gerado', 'data_hora', 'ativo', 'criado_em', 'atualizado_em']
         read_only_fields = ['paciente']
 
-    def get_data_hora(self, obj):
+    def get_data_hora(self, obj) -> str:
         return f"{obj.horario_gerado.data} ({obj.horario_gerado.agenda.get_dias_semana_display()}) às {obj.horario_gerado.horario_inicio}"

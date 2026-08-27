@@ -22,6 +22,7 @@ class EspecialidadeViewSet(viewsets.ModelViewSet):
 
 class AgendaViewSet(viewsets.ModelViewSet):
     permission_classes = [IsEspecialistaOwner]
+    queryset = Agenda.objects.all()
     serializer_class = AgendaSerializer
 
     def get_queryset(self):

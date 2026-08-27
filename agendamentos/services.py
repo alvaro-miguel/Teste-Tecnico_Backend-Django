@@ -43,7 +43,7 @@ def agendar_consulta(paciente_id, horario_id):
         horario = HorarioGerado.objects.select_for_update().get(id=horario_id)
 
         if horario.status != 'DISPONIVEL':
-            raise ValidationError("Este horário não está disponível")
+            raise ValidationError({"erro":"Este horário não está disponível"})
 
         horario.status = 'RESERVADO'
         horario.save()

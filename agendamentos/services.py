@@ -1,10 +1,12 @@
 
 from datetime import datetime, date, timedelta
-from .models import HorarioGerado, Consulta
+from .models import HorarioGerado, Consulta, StatusHorario
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
 
 def gerar_horarios(agenda):
+    agenda.full_clean()
+
     data_base = date.today()
     horarios_criar = []
 
@@ -16,24 +18,23 @@ def gerar_horarios(agenda):
             fim = datetime.combine(dia_atual, agenda.hora_fim_expediente)
 
             diferenca = fim - inicio
-            minutos_totais = int(diferenca.total_seconds() / 60)
-            duracao_min_vaga = minutos_totais // agenda.quantidade_vagas_dia
-
-            tempo_atual = inicio
-
-            for _ in range(agenda.quantidade_vagas_dia):
-                proximo_tempo = tempo_atual + timedelta(minutes=duracao_min_vaga)
+            for indice in range(agenda.quantidade_vagas_dia):
+                tempo_atual = inicio + (
+                    diferenca * indice / agenda.quantidade_vagas_dia
+                )
+                proximo_tempo = inicio + (
+                    diferenca * (indice + 1) / agenda.quantidade_vagas_dia
+                )
 
                 horario = HorarioGerado(
                     agenda=agenda,
                     data=dia_atual,
                     horario_inicio = tempo_atual.time(),
                     horario_fim = proximo_tempo.time(),
-                    status='DISPONIVEL'
+                    status=StatusHorario.DISPONIVEL
                 )
 
                 horarios_criar.append(horario)
-                tempo_atual = proximo_tempo
 
     HorarioGerado.objects.bulk_create(horarios_criar)
 

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator
@@ -39,9 +41,30 @@ class Agenda(CommonModel):
     quantidade_vagas_dia = models.IntegerField(validators=[MinValueValidator(1)])
 
     def clean(self):
-        if self.hora_inicio_expediente and self.hora_fim_expediente:
-            if self.hora_inicio_expediente >= self.hora_fim_expediente:
-                raise ValidationError("Hora de início do expediente deve ser anterior a hora do fim expediente")
+        super().clean()
+
+        if not self.hora_inicio_expediente or not self.hora_fim_expediente:
+            return
+
+        if self.hora_inicio_expediente >= self.hora_fim_expediente:
+            raise ValidationError({
+                'hora_fim_expediente': (
+                    'A hora de fim do expediente deve ser posterior à hora de início.'
+                )
+            })
+
+        if self.quantidade_vagas_dia:
+            inicio = datetime.combine(datetime.min.date(), self.hora_inicio_expediente)
+            fim = datetime.combine(datetime.min.date(), self.hora_fim_expediente)
+            duracao_segundos = int((fim - inicio).total_seconds())
+
+            if self.quantidade_vagas_dia > duracao_segundos:
+                raise ValidationError({
+                    'quantidade_vagas_dia': (
+                        'A quantidade de vagas não pode gerar horários com '
+                        'duração inferior a um segundo.'
+                    )
+                })
 
 
     def __str__(self):

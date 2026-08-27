@@ -65,7 +65,7 @@ class AgendamentoTestCase(APITestCase):
         self.assertIn('erro', response.data) 
 
 
-    def teste_gerarcao_horarios_automaticos(self):
+    def test_geracao_horarios_automaticos(self):
         self.client.force_authenticate(user=self.usuario_especialista)
         url_agenda = reverse('agenda-list')
 
@@ -73,14 +73,51 @@ class AgendamentoTestCase(APITestCase):
             "especialista":self.especialista.id,
             "dias_semana":1,
             "hora_inicio_expediente":"08:00:00",
-            "hora_fim_expediente":"10:00:00",
+            "hora_fim_expediente":"10:01:00",
             "quantidade_vagas_dia":4
         }
 
         response = self.client.post(url_agenda, payload)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        horarios_gerados = HorarioGerado.objects.filter(agenda_id=response.data['id']).count()
-        self.assertGreater(horarios_gerados, 0, "Nenhum horario foi gerado")
+        horarios_gerados = HorarioGerado.objects.filter(
+            agenda_id=response.data['id']
+        ).order_by('data', 'horario_inicio')
+        self.assertGreater(horarios_gerados.count(), 0, "Nenhum horário foi gerado")
+
+        datas_geradas = horarios_gerados.values_list('data', flat=True).distinct()
+        for data_horario in datas_geradas:
+            horarios_do_dia = list(horarios_gerados.filter(data=data_horario))
+            self.assertEqual(len(horarios_do_dia), 4)
+            self.assertEqual(horarios_do_dia[0].horario_inicio, time(8, 0))
+            self.assertEqual(horarios_do_dia[-1].horario_fim, time(10, 1))
+            self.assertTrue(all(
+                atual.horario_fim == seguinte.horario_inicio
+                for atual, seguinte in zip(horarios_do_dia, horarios_do_dia[1:])
+            ))
+
+    def test_rejeita_agenda_com_intervalo_invalido(self):
+        self.client.force_authenticate(user=self.usuario_especialista)
+        response = self.client.post(reverse('agenda-list'), {
+            'dias_semana': 1,
+            'hora_inicio_expediente': '10:00:00',
+            'hora_fim_expediente': '08:00:00',
+            'quantidade_vagas_dia': 4,
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('hora_fim_expediente', response.data)
+
+    def test_rejeita_quantidade_de_vagas_que_gera_horario_vazio(self):
+        self.client.force_authenticate(user=self.usuario_especialista)
+        response = self.client.post(reverse('agenda-list'), {
+            'dias_semana': 1,
+            'hora_inicio_expediente': '08:00:00',
+            'hora_fim_expediente': '08:00:01',
+            'quantidade_vagas_dia': 2,
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('quantidade_vagas_dia', response.data)
 
 
 class RaceConditionCase(APITransactionTestCase):

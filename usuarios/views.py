@@ -1,13 +1,10 @@
-from django.shortcuts import render
 from rest_framework import viewsets
 from .models import Especialista, Paciente
 from .serializers import EspecialistaSerializer, PacienteSerializer
-from agendamentos.permissions import IsInterno
-
-# Create your views here.
+from agendamentos.permissions import IsInterno, IsInternoOrReadOnly
 
 class EspecialistaViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsInterno]
+    permission_classes = [IsInternoOrReadOnly]
     queryset = Especialista.objects.all()
     serializer_class = EspecialistaSerializer
 

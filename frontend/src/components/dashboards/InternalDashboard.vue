@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { BookOpen, Check, ClipboardPlus, Plus, Search, Stethoscope, Trash2, UserPlus, Users, X } from 'lucide-vue-next'
 import { listAll, request } from '../../services/api'
 import { useSessionStore } from '../../stores/session'
+import { maskCpf, maskPhone } from '../../utils/masks'
 
 const session = useSessionStore()
 const activeTab = ref('especialidades')
@@ -52,6 +53,12 @@ function userPayload(form) {
 }
 
 function resetForm(form) { Object.keys(form).forEach((key) => { form[key] = '' }) }
+
+function applyMask(form, field, mask, event) {
+  const maskedValue = mask(event.target.value)
+  form[field] = maskedValue
+  event.target.value = maskedValue
+}
 
 async function createSpecialty() {
   saving.value = true
@@ -120,13 +127,13 @@ onMounted(load)
 
       <form v-if="formKind === 'especialistas'" class="credential-form" @submit.prevent="createSpecialist">
         <div class="form-section-title"><UserPlus /><div><strong>Dados do especialista</strong><span>O usuário e a senha serão usados para acessar o painel profissional.</span></div></div>
-        <div class="form-grid"><label><span>Nome *</span><input v-model.trim="specialistForm.first_name" required /></label><label><span>Sobrenome</span><input v-model.trim="specialistForm.last_name" /></label><label><span>Usuário *</span><input v-model.trim="specialistForm.username" required autocomplete="off" /></label><label><span>Senha *</span><input v-model="specialistForm.password" type="password" required minlength="8" autocomplete="new-password" /></label><label><span>E-mail</span><input v-model.trim="specialistForm.email" type="email" /></label><label><span>Telefone</span><input v-model.trim="specialistForm.telefone" placeholder="(11) 99999-9999" /></label><label><span>CPF</span><input v-model.trim="specialistForm.cpf" placeholder="000.000.000-00" /></label><label><span>CRM *</span><input v-model.trim="specialistForm.crm" required placeholder="CRM-SP 12345" /></label><label class="span-two"><span>Especialidade *</span><select v-model="specialistForm.especialidade" required><option value="" disabled>Selecione</option><option v-for="item in specialties" :key="item.id" :value="item.id">{{ item.nome_especialidade }}</option></select></label></div>
+        <div class="form-grid"><label><span>Nome *</span><input v-model.trim="specialistForm.first_name" required /></label><label><span>Sobrenome</span><input v-model.trim="specialistForm.last_name" /></label><label><span>Usuário *</span><input v-model.trim="specialistForm.username" required autocomplete="off" /></label><label><span>Senha *</span><input v-model="specialistForm.password" type="password" required minlength="8" autocomplete="new-password" /></label><label><span>E-mail</span><input v-model.trim="specialistForm.email" type="email" /></label><label><span>Telefone</span><input :value="specialistForm.telefone" type="tel" inputmode="numeric" maxlength="15" autocomplete="tel" placeholder="(11) 99999-9999" @input="applyMask(specialistForm, 'telefone', maskPhone, $event)" /></label><label><span>CPF</span><input :value="specialistForm.cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" @input="applyMask(specialistForm, 'cpf', maskCpf, $event)" /></label><label><span>CRM *</span><input v-model.trim="specialistForm.crm" required placeholder="CRM-SP 12345" /></label><label class="span-two"><span>Especialidade *</span><select v-model="specialistForm.especialidade" required><option value="" disabled>Selecione</option><option v-for="item in specialties" :key="item.id" :value="item.id">{{ item.nome_especialidade }}</option></select></label></div>
         <div class="form-actions"><button type="button" class="button button-ghost" @click="formKind = ''">Cancelar</button><button class="button button-primary" :disabled="saving">{{ saving ? 'Credenciando…' : 'Credenciar especialista' }}</button></div>
       </form>
 
       <form v-if="formKind === 'pacientes'" class="credential-form" @submit.prevent="createPatient">
         <div class="form-section-title"><UserPlus /><div><strong>Dados do paciente</strong><span>Crie as credenciais que darão acesso à agenda online.</span></div></div>
-        <div class="form-grid"><label><span>Nome *</span><input v-model.trim="patientForm.first_name" required /></label><label><span>Sobrenome</span><input v-model.trim="patientForm.last_name" /></label><label><span>Usuário *</span><input v-model.trim="patientForm.username" required autocomplete="off" /></label><label><span>Senha *</span><input v-model="patientForm.password" type="password" required minlength="8" autocomplete="new-password" /></label><label><span>E-mail</span><input v-model.trim="patientForm.email" type="email" /></label><label><span>Telefone</span><input v-model.trim="patientForm.telefone" placeholder="(11) 99999-9999" /></label><label class="span-two"><span>CPF</span><input v-model.trim="patientForm.cpf" placeholder="000.000.000-00" /></label></div>
+        <div class="form-grid"><label><span>Nome *</span><input v-model.trim="patientForm.first_name" required /></label><label><span>Sobrenome</span><input v-model.trim="patientForm.last_name" /></label><label><span>Usuário *</span><input v-model.trim="patientForm.username" required autocomplete="off" /></label><label><span>Senha *</span><input v-model="patientForm.password" type="password" required minlength="8" autocomplete="new-password" /></label><label><span>E-mail</span><input v-model.trim="patientForm.email" type="email" /></label><label><span>Telefone</span><input :value="patientForm.telefone" type="tel" inputmode="numeric" maxlength="15" autocomplete="tel" placeholder="(11) 99999-9999" @input="applyMask(patientForm, 'telefone', maskPhone, $event)" /></label><label class="span-two"><span>CPF</span><input :value="patientForm.cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" @input="applyMask(patientForm, 'cpf', maskCpf, $event)" /></label></div>
         <div class="form-actions"><button type="button" class="button button-ghost" @click="formKind = ''">Cancelar</button><button class="button button-primary" :disabled="saving">{{ saving ? 'Cadastrando…' : 'Cadastrar paciente' }}</button></div>
       </form>
 
@@ -136,7 +143,7 @@ onMounted(load)
 
       <div v-else-if="activeTab === 'especialistas'" class="table-wrap"><table><thead><tr><th>Profissional</th><th>Especialidade</th><th>CRM</th><th></th></tr></thead><tbody><tr v-for="item in filteredSpecialists" :key="item.id"><td><span class="table-person"><span class="avatar">{{ item.nome?.[0] }}</span><strong>Dr(a). {{ item.nome }}</strong></span></td><td>{{ item.especialidade_detalhe?.nome_especialidade }}</td><td>{{ item.crm }}</td><td><button class="icon-button danger" aria-label="Desativar especialista" @click="deactivate('/usuarios/especialistas/', item.id, item.nome)"><Trash2 :size="17" /></button></td></tr></tbody></table></div>
 
-      <div v-else-if="activeTab === 'pacientes'" class="table-wrap"><table><thead><tr><th>Paciente</th><th>Telefone</th><th>Cadastro</th><th></th></tr></thead><tbody><tr v-for="item in filteredPatients" :key="item.id"><td><span class="table-person"><span class="avatar">{{ item.nome?.[0] }}</span><strong>{{ item.nome }}</strong></span></td><td>{{ item.telefone || 'Não informado' }}</td><td>{{ new Intl.DateTimeFormat('pt-BR').format(new Date(item.criado_em)) }}</td><td><button class="icon-button danger" aria-label="Desativar paciente" @click="deactivate('/usuarios/pacientes/', item.id, item.nome)"><Trash2 :size="17" /></button></td></tr></tbody></table></div>
+      <div v-else-if="activeTab === 'pacientes'" class="table-wrap"><table><thead><tr><th>Paciente</th><th>Telefone</th><th>Cadastro</th><th></th></tr></thead><tbody><tr v-for="item in filteredPatients" :key="item.id"><td><span class="table-person"><span class="avatar">{{ item.nome?.[0] }}</span><strong>{{ item.nome }}</strong></span></td><td>{{ item.telefone ? maskPhone(item.telefone) : 'Não informado' }}</td><td>{{ new Intl.DateTimeFormat('pt-BR').format(new Date(item.criado_em)) }}</td><td><button class="icon-button danger" aria-label="Desativar paciente" @click="deactivate('/usuarios/pacientes/', item.id, item.nome)"><Trash2 :size="17" /></button></td></tr></tbody></table></div>
 
       <div v-else class="table-wrap"><table><thead><tr><th>Paciente</th><th>Especialista</th><th>Especialidade</th><th>Data e horário</th></tr></thead><tbody><tr v-for="item in appointments" :key="item.id"><td><span class="table-person"><span class="avatar">{{ item.nome_paciente?.[0] }}</span><strong>{{ item.nome_paciente }}</strong></span></td><td>Dr(a). {{ item.nome_especialista }}</td><td>{{ item.especialidade }}</td><td>{{ item.data_hora }}</td></tr></tbody></table></div>
     </section>

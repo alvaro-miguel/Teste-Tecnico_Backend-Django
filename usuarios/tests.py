@@ -269,3 +269,40 @@ class ValidacaoCadastroAPITestCase(APITestCase):
 
         self.assertEqual(resposta.status_code, status.HTTP_200_OK)
         self.assertEqual(resposta.data['count'], 5)
+
+
+class MeuPerfilAPITestCase(APITestCase):
+    def test_requer_autenticacao(self):
+        resposta = self.client.get(reverse('meu-perfil'))
+
+        self.assertEqual(resposta.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_retorna_identidade_e_perfil_do_paciente(self):
+        usuario = Usuario.objects.create_user(
+            username='maria',
+            password='SenhaForte@2026',
+            first_name='Maria',
+            last_name='Souza',
+            tipo_usuario=TipoUsuario.PACIENTE,
+        )
+        paciente = Paciente.objects.create(usuario=usuario)
+        self.client.force_authenticate(usuario)
+
+        resposta = self.client.get(reverse('meu-perfil'))
+
+        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        self.assertEqual(resposta.data['nome'], 'Maria Souza')
+        self.assertEqual(resposta.data['tipo_usuario'], TipoUsuario.PACIENTE)
+        self.assertEqual(resposta.data['perfil_id'], paciente.id)
+
+    def test_usuario_sem_perfil_retorna_id_nulo(self):
+        usuario = Usuario.objects.create_user(
+            username='perfil.incompleto',
+            tipo_usuario=TipoUsuario.ESPECIALISTA,
+        )
+        self.client.force_authenticate(usuario)
+
+        resposta = self.client.get(reverse('meu-perfil'))
+
+        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        self.assertIsNone(resposta.data['perfil_id'])

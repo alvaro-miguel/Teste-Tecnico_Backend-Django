@@ -110,26 +110,44 @@ cd frontend
 npm run build
 ```
 
-## Deploy do frontend no Render
+## Ambiente de produção
 
-O arquivo `render.yaml` configura o Vue como Static Site e aponta as chamadas
-para a API publicada em `https://api-agendamentos-ixzf.onrender.com/api`.
+A aplicação está publicada no Render:
 
-1. No Render, abra **New > Blueprint** e conecte este repositório.
-2. Selecione a branch `deploy_frontend_render` e aplique o Blueprint.
-3. Após a criação, confirme a URL do frontend. O nome configurado gera,
-   normalmente, `https://frontend-agendamentos-ixzf.onrender.com`.
-4. No serviço do backend, adicione a variável:
+| Recurso | Endereço |
+| --- | --- |
+| Frontend Vue | [frontend-agendamentos-ixzf.onrender.com](https://frontend-agendamentos-ixzf.onrender.com/) |
+| API Django | [api-agendamentos-ixzf.onrender.com/api](https://api-agendamentos-ixzf.onrender.com/api/) |
+| Swagger UI | [api-agendamentos-ixzf.onrender.com/api/docs](https://api-agendamentos-ixzf.onrender.com/api/docs/) |
+| Esquema OpenAPI | [api-agendamentos-ixzf.onrender.com/api/schema](https://api-agendamentos-ixzf.onrender.com/api/schema/) |
+
+O frontend é um **Static Site** construído a partir do diretório `frontend/`.
+Durante o build, a variável abaixo define a API consumida pelo Vue:
+
+```text
+VITE_API_URL=https://api-agendamentos-ixzf.onrender.com/api
+```
+
+O backend autoriza exclusivamente a origem publicada do frontend:
 
 ```text
 CORS_ALLOWED_ORIGINS=https://frontend-agendamentos-ixzf.onrender.com
 ```
 
-5. Faça um novo deploy do backend. Caso o Render atribua outro endereço ao
-   frontend, use o endereço efetivamente criado na variável acima.
+O arquivo `render.yaml` mantém a configuração do Static Site, incluindo o
+rewrite de `/*` para `/index.html`. Esse rewrite permite acessar diretamente
+rotas do Vue Router, como `/entrar` e `/painel`, sem receber erro 404.
 
-O rewrite de `/*` para `/index.html` já está configurado no Blueprint para que
-rotas como `/entrar` e `/painel` funcionem quando acessadas diretamente.
+A raiz `https://api-agendamentos-ixzf.onrender.com/` não possui uma página
+própria; utilize o frontend para acessar o sistema ou `/api/docs/` para consultar
+a documentação da API.
+
+### Publicar uma atualização
+
+1. Envie as alterações para a branch monitorada pelo serviço no Render.
+2. O Static Site executará `npm ci && npm run build` e publicará `frontend/dist`.
+3. Mudanças no backend exigem um novo deploy do serviço da API.
+4. Se o domínio do frontend mudar, atualize `CORS_ALLOWED_ORIGINS` no backend.
 
 ## Variáveis de ambiente
 

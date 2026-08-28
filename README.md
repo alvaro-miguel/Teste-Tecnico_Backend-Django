@@ -121,6 +121,11 @@ A aplicação está publicada no Render:
 | Swagger UI | [api-agendamentos-ixzf.onrender.com/api/docs](https://api-agendamentos-ixzf.onrender.com/api/docs/) |
 | Esquema OpenAPI | [api-agendamentos-ixzf.onrender.com/api/schema](https://api-agendamentos-ixzf.onrender.com/api/schema/) |
 
+> **Credenciais de Teste (Administrador / Usuário Interno):**
+> Para testar a criação de Pacientes e Especialistas na nuvem (via Frontend ou Swagger), utilize as credenciais abaixo para se autenticar:
+> - **Usuário:** `admin_avaliador`
+> - **Senha:** `avaliador123`
+
 O frontend é um **Static Site** construído a partir do diretório `frontend/`.
 Durante o build, a variável abaixo define a API consumida pelo Vue:
 

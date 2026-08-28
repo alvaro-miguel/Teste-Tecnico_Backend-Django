@@ -1,5 +1,6 @@
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.validators import UnicodeUsernameValidator
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from rest_framework import serializers
 
@@ -198,3 +199,35 @@ class EspecialistaSerializer(PerfilSerializerMixin, serializers.ModelSerializer)
         if dados_usuario:
             self.atualizar_usuario(instance.usuario, dados_usuario)
         return super().update(instance, validated_data)
+
+
+class MeuPerfilSerializer(serializers.ModelSerializer):
+    nome = serializers.SerializerMethodField()
+    perfil_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Usuario
+        fields = [
+            'id',
+            'username',
+            'nome',
+            'email',
+            'tipo_usuario',
+            'perfil_id',
+            'is_superuser',
+        ]
+
+    def get_nome(self, obj) -> str:
+        return obj.get_full_name().strip() or obj.username
+
+    def get_perfil_id(self, obj) -> int | None:
+        try:
+            if obj.tipo_usuario == TipoUsuario.PACIENTE:
+                perfil = obj.paciente_perfil
+            elif obj.tipo_usuario == TipoUsuario.ESPECIALISTA:
+                perfil = obj.especialista_perfil
+            else:
+                perfil = None
+        except ObjectDoesNotExist:
+            perfil = None
+        return perfil.id if perfil else None

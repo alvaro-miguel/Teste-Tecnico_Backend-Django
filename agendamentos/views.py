@@ -104,7 +104,7 @@ class AgendaViewSet(viewsets.ModelViewSet):
     permission_classes = [IsEspecialistaOwner]
     queryset = (
         Agenda.objects
-        .select_related('especialista__usuario')
+        .select_related('especialista__usuario', 'especialista__especialidade')
         .prefetch_related(
             Prefetch(
                 'horarios',
@@ -156,6 +156,10 @@ class AgendaViewSet(viewsets.ModelViewSet):
 class HorarioGeradoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = (
         HorarioGerado.objects
+        .select_related(
+            'agenda__especialista__usuario',
+            'agenda__especialista__especialidade',
+        )
         .filter(
             agenda__ativo=True,
             agenda__especialista__ativo=True,
@@ -203,6 +207,7 @@ class ConsultaViewSet(
         .select_related(
             'paciente__usuario',
             'horario_gerado__agenda__especialista__usuario',
+            'horario_gerado__agenda__especialista__especialidade',
         )
         .order_by(
             'horario_gerado__data',

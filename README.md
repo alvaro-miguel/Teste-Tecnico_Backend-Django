@@ -1,6 +1,6 @@
-# API de Agendamentos Médicos
+# Clínica Agenda — Django REST + Vue
 
-API REST para administrar especialidades, especialistas, pacientes, agendas e consultas médicas. O sistema gera automaticamente as vagas de cada agenda, usa autenticação JWT, aplica exclusão lógica aos registros e protege reservas concorrentes com transações e bloqueios no PostgreSQL.
+Aplicação completa para administrar especialidades, especialistas, pacientes, agendas e consultas médicas. O backend gera automaticamente as vagas de cada agenda, usa autenticação JWT, aplica exclusão lógica aos registros e protege reservas concorrentes com transações e bloqueios no PostgreSQL. O frontend responsivo em Vue oferece uma experiência específica para pacientes, especialistas e equipe interna.
 
 ## Tecnologias
 
@@ -11,15 +11,27 @@ API REST para administrar especialidades, especialistas, pacientes, agendas e co
 - `django-filter`
 - OpenAPI e Swagger UI com `drf-spectacular`
 - Docker e Docker Compose
+- Vue 3, Vite, Pinia e Vue Router
+- Nginx para servir o frontend e encaminhar as chamadas da API
 
 ## Estrutura do projeto
 
 ```text
 agendamentos/  Domínio de especialidades, agendas, horários e consultas
 core/          Modelo-base, manager de registros ativos e exclusão lógica
+frontend/      Aplicação Vue, estilos, painéis por perfil e configuração Nginx
 setup/         Configurações, URLs e entrypoints ASGI/WSGI do Django
 usuarios/      Usuário customizado e perfis de pacientes e especialistas
 ```
+
+## Experiência no frontend
+
+- Área pública com especialidades, profissionais e horários disponíveis.
+- Login JWT com renovação automática do token de acesso.
+- Paciente: filtra vagas, confirma uma reserva e acompanha suas consultas.
+- Especialista: cria e desativa agendas, consulta vagas geradas e vê pacientes agendados.
+- Interno ou superusuário: cadastra especialidades, credencia especialistas, cadastra pacientes e acompanha todas as consultas.
+- Layout responsivo, estados de carregamento, mensagens de erro e confirmação de ações.
 
 ## Como executar com Docker
 
@@ -45,7 +57,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-O serviço `web` aguarda o PostgreSQL ficar saudável, executa as migrations e disponibiliza a API em `http://127.0.0.1:8000/`.
+O serviço `web` aguarda o PostgreSQL ficar saudável, executa as migrations e disponibiliza a API em `http://127.0.0.1:8000/`. O frontend fica disponível em `http://127.0.0.1:5173/` e encaminha automaticamente as chamadas `/api/` para o backend.
 
 Com os containers ativos, use:
 
@@ -80,6 +92,23 @@ python manage.py runserver
 No Linux ou macOS, ative o ambiente com `source venv/bin/activate` e copie o arquivo com `cp .env.example .env`.
 
 Antes de executar as migrations, ajuste as credenciais do PostgreSQL no `.env`. Fora do Docker, normalmente `POSTGRES_HOST=localhost`; no Compose esse valor é substituído por `db`.
+
+Em outro terminal, inicie o frontend:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Abra `http://127.0.0.1:5173/`. Durante o desenvolvimento, o Vite encaminha `/api/` para `http://127.0.0.1:8000/`, portanto não é necessária configuração adicional de CORS.
+
+Para validar a versão de produção do frontend:
+
+```powershell
+cd frontend
+npm run build
+```
 
 ## Variáveis de ambiente
 
@@ -122,6 +151,7 @@ Todos os endpoints de recurso terminam com `/`. As rotas de detalhe seguem o for
 | --- | --- | --- |
 | `POST` | `/api/token/` | Público, com usuário e senha válidos |
 | `POST` | `/api/token/refresh/` | Público, com refresh token válido |
+| `GET` | `/api/usuarios/me/` | Usuário autenticado; retorna identidade e tipo de perfil |
 | `GET` | `/api/usuarios/especialistas/` | Público |
 | `POST`, `PUT`, `PATCH`, `DELETE` | `/api/usuarios/especialistas/` | Interno ou superusuário |
 | CRUD | `/api/usuarios/pacientes/` | Interno ou superusuário |

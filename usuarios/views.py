@@ -1,7 +1,9 @@
-from rest_framework import viewsets
+from rest_framework import permissions, viewsets
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from .models import Especialista, Paciente
-from .serializers import EspecialistaSerializer, PacienteSerializer
+from .serializers import EspecialistaSerializer, MeuPerfilSerializer, PacienteSerializer
 from agendamentos.permissions import IsInterno, IsInternoOrReadOnly
 
 @extend_schema_view(
@@ -93,3 +95,19 @@ class PacienteViewSet(viewsets.ModelViewSet):
         .order_by('usuario__first_name', 'id')
     )
     serializer_class = PacienteSerializer
+
+
+class MeuPerfilView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary='Consultar usuário autenticado',
+        description=(
+            'Retorna identidade, tipo de usuário e perfil associados ao token JWT.'
+        ),
+        responses=MeuPerfilSerializer,
+        tags=['Autenticação'],
+    )
+    def get(self, request):
+        serializer = MeuPerfilSerializer(request.user)
+        return Response(serializer.data)

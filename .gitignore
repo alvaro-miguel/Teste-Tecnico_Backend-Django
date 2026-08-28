@@ -4,3 +4,6 @@ __pycache__/
 *.py[cod]
 *.sqlite3
 Teste Técnico Estágio.pdf
+frontend/node_modules/
+frontend/dist/
+tmp/

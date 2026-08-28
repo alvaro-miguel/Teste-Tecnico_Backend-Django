@@ -29,9 +29,35 @@ class EspecialidadeSerializer(serializers.ModelSerializer):
 
         
 class HorarioGeradoSerializer(serializers.ModelSerializer):
+    agenda = serializers.IntegerField(source='agenda_id', read_only=True)
+    especialista = serializers.IntegerField(
+        source='agenda.especialista_id',
+        read_only=True,
+    )
+    nome_especialista = serializers.CharField(
+        source='agenda.especialista.usuario.first_name',
+        read_only=True,
+    )
+    especialidade = serializers.CharField(
+        source='agenda.especialista.especialidade.nome_especialidade',
+        read_only=True,
+    )
+
     class Meta:
         model = HorarioGerado
-        fields = ['id', 'horario_inicio', 'horario_fim', 'status', 'data', 'criado_em', 'atualizado_em']
+        fields = [
+            'id',
+            'agenda',
+            'especialista',
+            'nome_especialista',
+            'especialidade',
+            'horario_inicio',
+            'horario_fim',
+            'status',
+            'data',
+            'criado_em',
+            'atualizado_em',
+        ]
 
 
 class AgendaSerializer(serializers.ModelSerializer):
@@ -88,11 +114,30 @@ class AgendaSerializer(serializers.ModelSerializer):
 
 class ConsultaSerializer(serializers.ModelSerializer):
     nome_paciente = serializers.CharField(source='paciente.usuario.first_name', read_only=True)
+    nome_especialista = serializers.CharField(
+        source='horario_gerado.agenda.especialista.usuario.first_name',
+        read_only=True,
+    )
+    especialidade = serializers.CharField(
+        source='horario_gerado.agenda.especialista.especialidade.nome_especialidade',
+        read_only=True,
+    )
     data_hora = serializers.SerializerMethodField()
 
     class Meta:
         model = Consulta
-        fields = ['id', 'paciente', 'nome_paciente', 'horario_gerado', 'data_hora', 'ativo', 'criado_em', 'atualizado_em']
+        fields = [
+            'id',
+            'paciente',
+            'nome_paciente',
+            'horario_gerado',
+            'nome_especialista',
+            'especialidade',
+            'data_hora',
+            'ativo',
+            'criado_em',
+            'atualizado_em',
+        ]
         read_only_fields = [
             'paciente',
             'ativo',

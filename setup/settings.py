@@ -39,6 +39,11 @@ DEBUG = env_bool('DEBUG', True)
 
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1')
 
+# Origins autorizadas a consumir a API a partir de um navegador.
+# Em produção, informe a URL pública do frontend em CORS_ALLOWED_ORIGINS.
+CORS_ALLOWED_ORIGINS = env_list('CORS_ALLOWED_ORIGINS')
+CORS_URLS_REGEX = r'^/api/.*$'
+
 
 # Application definition
 
@@ -49,6 +54,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'rest_framework',
     'core',
     'usuarios',
@@ -60,6 +66,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',

@@ -110,6 +110,27 @@ cd frontend
 npm run build
 ```
 
+## Deploy do frontend no Render
+
+O arquivo `render.yaml` configura o Vue como Static Site e aponta as chamadas
+para a API publicada em `https://api-agendamentos-ixzf.onrender.com/api`.
+
+1. No Render, abra **New > Blueprint** e conecte este repositório.
+2. Selecione a branch `deploy_frontend_render` e aplique o Blueprint.
+3. Após a criação, confirme a URL do frontend. O nome configurado gera,
+   normalmente, `https://frontend-agendamentos-ixzf.onrender.com`.
+4. No serviço do backend, adicione a variável:
+
+```text
+CORS_ALLOWED_ORIGINS=https://frontend-agendamentos-ixzf.onrender.com
+```
+
+5. Faça um novo deploy do backend. Caso o Render atribua outro endereço ao
+   frontend, use o endereço efetivamente criado na variável acima.
+
+O rewrite de `/*` para `/index.html` já está configurado no Blueprint para que
+rotas como `/entrar` e `/painel` funcionem quando acessadas diretamente.
+
 ## Variáveis de ambiente
 
 | Variável | Finalidade | Valor de desenvolvimento |
@@ -117,6 +138,7 @@ npm run build
 | `SECRET_KEY` | Chave criptográfica do Django | `troque-por-uma-chave-segura` |
 | `DEBUG` | Ativa o modo de depuração | `True` |
 | `ALLOWED_HOSTS` | Hosts permitidos, separados por vírgula | `localhost,127.0.0.1` |
+| `CORS_ALLOWED_ORIGINS` | Origens do frontend autorizadas, separadas por vírgula | vazio |
 | `TIME_ZONE` | Fuso horário da aplicação | `America/Sao_Paulo` |
 | `POSTGRES_DB` | Nome do banco | `agendamentos_db` |
 | `POSTGRES_USER` | Usuário do banco | `usuario_db` |
